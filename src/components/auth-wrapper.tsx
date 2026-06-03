@@ -29,18 +29,14 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
           transition={{ duration: 0.8, ease: "easeOut" }}
           className="z-10 flex max-w-md flex-col items-center space-y-8 text-center"
         >
-          <div className="space-y-4">
-            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-primary shadow-2xl">
-              <span className="text-4xl font-bold text-primary-foreground">T</span>
-            </div>
             <h1 className="text-4xl font-semibold tracking-tight text-foreground">
               Trackr
             </h1>
-            <p className="text-lg text-muted-foreground">
-              A personal memory, experience, and consumption tracking system.
-            </p>
-          </div>
-
+          <p className="text-sm max-w-sm p-0 m-2">
+            A simple app built with &#x2764;&#xFE0F; by <b>Keshav Sharma</b>
+          </p>
+          <p className="text-xs">Don't worry your data won't be tracked - because I don't know how to.</p>
+            
           <Button 
             size="lg" 
             className="w-full sm:w-auto h-12 px-8 text-base shadow-xl hover:scale-105 transition-transform" 
@@ -48,10 +44,6 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
           >
             Sign in with Google
           </Button>
-
-          <p className="text-xs text-muted-foreground max-w-xs mt-8">
-            Your data is private, secure, and encrypted. Designed for personal use.
-          </p>
         </motion.div>
       </div>
     );
