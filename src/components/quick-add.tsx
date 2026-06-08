@@ -3,10 +3,10 @@
 import * as React from "react";
 import { Command } from "cmdk";
 import { useAppStore } from "@/store/app-store";
-import { useAddItem, useUserTags, useCollections } from "@/hooks/use-items";
-import { Loader2 } from "lucide-react";
+import { useAddItem, useUserTags } from "@/hooks/use-items";
+import { Loader2, X, Hash, CornerDownLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
-
+import { motion, AnimatePresence } from "framer-motion";
 import { HASHTAG_REGEX, formatTag, extractTags, cleanTitle } from "@/lib/parser";
 
 export function QuickAdd() {
@@ -16,8 +16,10 @@ export function QuickAdd() {
   
   const { mutateAsync: addItem } = useAddItem();
   const globalTags = useUserTags();
-  const { data: collections } = useCollections();
   
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  // Keyboard shortcut (Cmd+K or Ctrl+K) to toggle
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
@@ -29,47 +31,79 @@ export function QuickAdd() {
     return () => document.removeEventListener("keydown", down);
   }, [quickAddOpen, setQuickAddOpen]);
 
-  const cursorIndex = typeof document !== 'undefined' ? (document.activeElement as HTMLInputElement)?.selectionStart || 0 : 0;
-  const textBeforeCursor = inputValue.slice(0, cursorIndex);
-  const currentWord = textBeforeCursor.split(' ').pop() || '';
-  const isTypingTag = currentWord.startsWith('#');
-  const searchTag = isTypingTag ? formatTag(currentWord) : '';
+  // Autofocus input when modal opens
+  React.useEffect(() => {
+    if (quickAddOpen) {
+      const timer = setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          inputRef.current.select();
+        }
+      }, 80);
+      return () => clearTimeout(timer);
+    }
+  }, [quickAddOpen]);
 
-  const collectionTags = React.useMemo(() => {
-    if (!collections) return [];
-    return collections.map(c => formatTag(c.title));
-  }, [collections]);
+  // Extract cursor and tag typing state
+  const getCursorAndTagState = () => {
+    if (!inputRef.current) return { isTypingTag: false, searchTag: "", cursorIndex: 0 };
+    const cursorIndex = inputRef.current.selectionStart || 0;
+    const textBeforeCursor = inputValue.slice(0, cursorIndex);
+    const words = textBeforeCursor.split(/\s+/);
+    const currentWord = words[words.length - 1] || "";
+    const isTypingTag = currentWord.startsWith("#");
+    const searchTag = isTypingTag ? formatTag(currentWord) : "";
+    return { isTypingTag, searchTag, cursorIndex };
+  };
+
+  const { isTypingTag, searchTag } = getCursorAndTagState();
 
   const suggestedTags = React.useMemo(() => {
     if (!isTypingTag) return [];
     const extractedCurrently = (inputValue.match(HASHTAG_REGEX) || []).map(formatTag);
-    // Combine global tags with dynamic collection tags
-    const allPossibleTags = Array.from(new Set([...globalTags, ...collectionTags]));
     
-    return allPossibleTags.filter(tag => 
+    return globalTags.filter(tag => 
       tag.includes(searchTag) && !extractedCurrently.includes(tag)
     ).slice(0, 5);
-  }, [globalTags, collectionTags, searchTag, isTypingTag, inputValue]);
+  }, [globalTags, searchTag, isTypingTag, inputValue]);
 
   const handleSelectTag = (tag: string) => {
-    const words = inputValue.slice(0, cursorIndex).split(' ');
+    if (!inputRef.current) return;
+    const cursor = inputRef.current.selectionStart || 0;
+    const beforePart = inputValue.slice(0, cursor);
+    const afterPart = inputValue.slice(cursor);
+    
+    const words = beforePart.split(/\s+/);
     words.pop();
-    const beforePart = words.join(' ');
-    const newText = `${beforePart ? beforePart + ' ' : ''}#${tag} ` + inputValue.slice(cursorIndex);
+    
+    const prefix = words.join(" ");
+    const inserted = `${prefix ? prefix + " " : ""}#${tag} `;
+    const newText = inserted + afterPart;
+    
     setInputValue(newText);
+    
+    const newCursorPos = inserted.length;
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        inputRef.current.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 10);
   };
 
   const handleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       if (!isTypingTag) {
         e.preventDefault();
         await handleSave();
       }
-    } else if (e.key === ' ') {
+    } else if (e.key === " ") {
       if (isTypingTag && searchTag.length > 0) {
         e.preventDefault();
         handleSelectTag(searchTag);
       }
+    } else if (e.key === "Escape") {
+      setQuickAddOpen(false);
     }
   };
 
@@ -96,78 +130,117 @@ export function QuickAdd() {
     }
   };
 
-  if (!quickAddOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] bg-background/50 backdrop-blur-sm">
-      <div className="fixed inset-0" onClick={() => setQuickAddOpen(false)} />
-      <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-border bg-card shadow-2xl mx-4">
-        <Command 
-          className="flex flex-col w-full h-full" 
-          shouldFilter={false} // We handle filtering manually for tags
-        >
-          <div className="flex items-center px-4">
-            <input
-              autoFocus
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Start typing... e.g. Interstellar #movies #watched"
-              className="flex h-16 w-full bg-transparent outline-none placeholder:text-muted-foreground text-lg md:text-xl"
-              disabled={isSaving}
-            />
-            {isSaving && <Loader2 className="size-5 animate-spin text-muted-foreground ml-2" />}
-          </div>
-          
-          {isTypingTag && (
-            <Command.List className="border-t max-h-[300px] overflow-y-auto p-2">
-              <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Suggested Tags</div>
-              {suggestedTags.map((tag) => (
-                <Command.Item
-                  key={tag}
-                  onSelect={() => handleSelectTag(tag)}
-                  className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm aria-selected:bg-accent aria-selected:text-accent-foreground font-medium"
-                >
-                  <span className="text-muted-foreground">#</span>{tag}
-                </Command.Item>
-              ))}
-              {suggestedTags.length === 0 && searchTag.length > 0 && (
-                <Command.Item
-                  onSelect={() => handleSelectTag(searchTag)}
-                  className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm aria-selected:bg-accent aria-selected:text-accent-foreground font-medium"
-                >
-                  Create <span className="font-semibold text-primary">#{searchTag}</span>
-                </Command.Item>
-              )}
-            </Command.List>
-          )}
+    <AnimatePresence>
+      {quickAddOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 backdrop-blur-xs md:items-center p-0 md:p-4">
+          {/* Backdrop Click */}
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0" 
+            onClick={() => setQuickAddOpen(false)} 
+          />
 
-          {!isTypingTag && inputValue.trim().length > 0 && (
-            <div className="p-2 border-t bg-secondary/30">
-              <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground flex justify-between items-center">
-                <span>Press Enter to save</span>
-                <div className="flex gap-1.5 flex-wrap">
-                  {(inputValue.match(HASHTAG_REGEX) || []).map((t, i) => {
-                    const tagRaw = formatTag(t);
-                    const isListTag = collectionTags.includes(tagRaw);
-                    return (
-                      <span 
-                        key={i} 
-                        className={cn(
-                          "px-1.5 py-0.5 rounded-md text-[10px] font-bold tracking-wider",
-                          isListTag ? "bg-blue-500/10 text-blue-500" : "bg-primary/10 text-primary"
-                        )}
-                      >
-                        {tagRaw.toLowerCase()}
-                      </span>
-                    );
-                  })}
-                </div>
+          {/* Quick Add Modal */}
+          <motion.div
+            initial={{ y: "100%", opacity: 0.8 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: "100%", opacity: 0.8 }}
+            transition={{ type: "spring", damping: 30, stiffness: 300 }}
+            className="relative z-10 w-full max-w-lg bg-card border-t border-x border-border md:border md:rounded-2xl rounded-t-2xl shadow-xl flex flex-col overflow-hidden pb-safe"
+          >
+            <Command className="flex flex-col w-full" shouldFilter={false}>
+              {/* Input row */}
+              <div className="flex items-center px-4 py-2 border-b border-border/30">
+                <input
+                  ref={inputRef}
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Flowers for Algernon #books #great"
+                  className="flex-1 h-12 bg-transparent outline-none border-none placeholder:text-muted-foreground/60 text-sm font-medium pr-3"
+                  disabled={isSaving}
+                  autoComplete="off"
+                />
+                
+                {isSaving ? (
+                  <Loader2 className="size-4 animate-spin text-muted-foreground ml-2" />
+                ) : (
+                  <button
+                    onClick={() => setQuickAddOpen(false)}
+                    className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-secondary active:scale-95 transition-all flex-shrink-0"
+                    aria-label="Close"
+                  >
+                    <X className="size-4 text-muted-foreground" />
+                  </button>
+                )}
               </div>
-            </div>
-          )}
-        </Command>
-      </div>
-    </div>
+              
+              {/* Suggested Tags (Autotargets) */}
+              {isTypingTag && (
+                <div className="border-b border-border/30 max-h-[160px] overflow-y-auto p-2 bg-secondary/5">
+                  <div className="px-1 pb-1.5 text-[9px] font-bold text-muted-foreground/60 uppercase tracking-widest flex items-center gap-1">
+                    <Hash className="size-2.5" /> Suggested Tags
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 p-0.5">
+                    {suggestedTags.map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => handleSelectTag(tag)}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-secondary text-xs font-medium hover:bg-primary/10 hover:text-primary transition-all"
+                      >
+                        #{tag}
+                      </button>
+                    ))}
+                    {suggestedTags.length === 0 && searchTag.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleSelectTag(searchTag)}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-primary/10 text-primary text-xs font-semibold"
+                      >
+                        Add: #{searchTag}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Statusbar / Submit indicator */}
+              <div className="px-4 py-2.5 bg-secondary/5 flex items-center justify-between gap-4">
+                <div className="flex-1 min-w-0 flex flex-wrap gap-1.5">
+                  {(inputValue.match(HASHTAG_REGEX) || []).map((t, i) => (
+                    <span 
+                      key={i} 
+                      className="text-[10px] font-semibold text-muted-foreground/80"
+                    >
+                      {formatTag(t)}
+                    </span>
+                  ))}
+                  {inputValue.trim().length === 0 && (
+                    <span className="text-[10px] text-muted-foreground/50">
+                      Type name, then hashtags starting with #.
+                    </span>
+                  )}
+                </div>
+                
+                {inputValue.trim().length > 0 && !isTypingTag && (
+                  <button
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="flex items-center gap-1 px-2.5 h-7 rounded bg-primary text-primary-foreground font-semibold text-[10px] active:scale-95 transition-transform"
+                  >
+                    <span>Save</span>
+                    <CornerDownLeft className="size-3" />
+                  </button>
+                )}
+              </div>
+            </Command>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
   );
 }

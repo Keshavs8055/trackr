@@ -1,97 +1,74 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useUserTags } from "@/hooks/use-items";
 import { useFilterStore } from "@/store/filter-store";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/components/auth-provider";
 import { useAppStore } from "@/store/app-store";
-import { 
-  Home, 
-  Film, 
-  BookOpen, 
-  Disc, 
-  Plane, 
-  Library, 
-  Star, 
-  Archive, 
-  Settings,
-  PlusCircle
-} from "lucide-react";
-
-const mainNavItems = [
-  { name: "Archive", href: "/", icon: Home },
-  { name: "Collections", href: "/collections", icon: Library },
-];
-
-function NavItem({ item, isActive }: { item: any; isActive: boolean }) {
-  const Icon = item.icon;
-  return (
-    <Link
-      href={item.href}
-      className={cn(
-        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
-        isActive 
-          ? "bg-secondary text-secondary-foreground shadow-sm" 
-          : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
-      )}
-    >
-      <Icon className="size-4" />
-      {item.name}
-    </Link>
-  );
-}
-
-// Updated Sidebar export to include ThemeToggle and User Profile
 import { useTagAction } from "@/hooks/use-tag-action";
+import { Archive, Plus, LogOut } from "lucide-react";
 
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const setQuickAddOpen = useAppStore(s => s.setQuickAddOpen);
 
   return (
-    <aside className="hidden md:flex w-64 flex-col border-r bg-background h-full p-4">
-      <div className="flex items-center gap-2 px-2 py-4 mb-6">
-        <span className="text-xl font-semibold tracking-tight">
-          {user?.displayName ? `${user.displayName.split(' ')[0]}'s Archive` : "Archive"}
-        </span>
+    <aside className="hidden md:flex w-60 flex-col border-r border-border/40 bg-background h-full p-5 justify-between">
+      <div className="flex-1 space-y-8 overflow-y-auto pr-1">
+        {/* Logo/Header */}
+        <div className="py-2">
+          <span className="text-base font-semibold tracking-tight text-foreground/90">
+            {user?.displayName ? `${user.displayName.split(' ')[0]}'s Archive` : "Personal Archive"}
+          </span>
+        </div>
+
+        {/* Main Nav */}
+        <div className="space-y-1">
+          <Link
+            href="/"
+            className={cn(
+              "flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm font-medium transition-all duration-150",
+              pathname === "/" 
+                ? "bg-secondary text-foreground" 
+                : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
+            )}
+          >
+            <Archive className="size-4 opacity-75" />
+            Archive
+          </Link>
+        </div>
+
+        {/* Tags Index */}
+        <div className="space-y-3">
+          <h4 className="px-2.5 text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest">
+            Tags
+          </h4>
+          <TagList />
+        </div>
       </div>
 
-      <nav className="flex-1 space-y-8 overflow-y-auto pr-2 pb-4">
-        <div className="space-y-1">
-          {mainNavItems.map((item) => (
-            <NavItem key={item.name} item={item} isActive={pathname === item.href} />
-          ))}
-        </div>
-
-        <div>
-          <h4 className="px-2 text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">
-            Your Tags
-          </h4>
-          <div className="space-y-0.5">
-            <TagList />
-          </div>
-        </div>
-      </nav>
-
-      <div className="mt-auto pt-4 border-t space-y-4">
+      {/* Footer Controls */}
+      <div className="pt-4 border-t border-border/40 space-y-3.5">
         <button 
-          onClick={() => useAppStore.getState().setQuickAddOpen(true)}
-          className="flex w-full items-center gap-2 rounded-lg bg-primary/10 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/20 transition-colors"
+          onClick={() => setQuickAddOpen(true)}
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary text-primary-foreground h-9 text-xs font-semibold hover:opacity-90 active:scale-98 transition-all"
         >
-          <PlusCircle className="size-4" />
-          <span>Quick Add (Cmd+K)</span>
+          <Plus className="size-3.5 stroke-[2.5px]" />
+          <span>Quick Add</span>
+          <span className="text-[10px] opacity-60 ml-1 font-normal">⌘K</span>
         </button>
         
-        <div className="flex items-center justify-between px-2 pt-2 border-t border-border/50">
+        <div className="flex items-center justify-between px-1.5 pt-1.5 border-t border-border/20">
           <button 
             onClick={logout} 
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-destructive transition-colors"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive transition-colors font-medium"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
-            <span className="font-medium">Log Out</span>
+            <LogOut className="size-3.5" />
+            <span>Sign Out</span>
           </button>
           <ThemeToggle />
         </div>
@@ -106,11 +83,11 @@ function TagList() {
   const handleTagAction = useTagAction();
 
   if (tags.length === 0) {
-    return <div className="px-3 py-2 text-xs text-muted-foreground italic">No tags yet</div>;
+    return <div className="px-2.5 text-xs text-muted-foreground/50 italic">No tags yet</div>;
   }
 
   return (
-    <>
+    <div className="flex flex-col gap-0.5">
       {tags.map(tag => {
         const isActive = selectedTags.includes(tag);
         return (
@@ -118,17 +95,17 @@ function TagList() {
             key={tag}
             onClick={() => handleTagAction(tag)}
             className={cn(
-              "w-full flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-200 text-left",
+              "w-full flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-150",
               isActive 
-                ? "bg-primary/10 text-primary" 
-                : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                ? "bg-secondary text-primary font-bold" 
+                : "text-muted-foreground/80 hover:bg-secondary/40 hover:text-foreground"
             )}
           >
-            <span className="opacity-50 text-xs">#</span>
-            <span className="truncate">{tag}</span>
+            <span className="truncate">#{tag}</span>
+            {isActive && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
           </button>
         );
       })}
-    </>
+    </div>
   );
 }

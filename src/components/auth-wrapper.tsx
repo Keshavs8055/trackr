@@ -7,7 +7,7 @@ import { Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 export function AuthWrapper({ children }: { children: React.ReactNode }) {
-  const { user, loading, signInWithGoogle } = useAuth();
+  const { user, loading, signInWithGoogle, signInWithMock } = useAuth();
 
   if (loading) {
     return (
@@ -35,15 +35,25 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
           <p className="text-sm max-w-sm p-0 m-2">
             A simple app built with &#x2764;&#xFE0F; by <b>Keshav Sharma</b>
           </p>
-          <p className="text-xs">Don't worry your data won't be tracked - because I don't know how to.</p>
+          <p className="text-xs text-muted-foreground">Don't worry, your data won't be tracked.</p>
             
-          <Button 
-            size="lg" 
-            className="w-full sm:w-auto h-12 px-8 text-base shadow-xl hover:scale-105 transition-transform" 
-            onClick={signInWithGoogle}
-          >
-            Sign in with Google
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-3 w-full justify-center">
+            <Button 
+              size="lg" 
+              className="w-full sm:w-auto h-12 px-8 text-base shadow-xl hover:scale-105 transition-transform" 
+              onClick={signInWithGoogle}
+            >
+              Sign in with Google
+            </Button>
+            <Button 
+              size="lg" 
+              variant="outline"
+              className="w-full sm:w-auto h-12 px-8 text-base hover:scale-105 transition-transform" 
+              onClick={signInWithMock}
+            >
+              Try Demo Mode
+            </Button>
+          </div>
         </motion.div>
       </div>
     );

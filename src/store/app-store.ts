@@ -4,10 +4,14 @@ interface AppState {
   quickAddOpen: boolean;
   setQuickAddOpen: (open: boolean) => void;
   toggleQuickAdd: () => void;
+  searchFocused: boolean;
+  setSearchFocused: (focused: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
   quickAddOpen: false,
   setQuickAddOpen: (open) => set({ quickAddOpen: open }),
   toggleQuickAdd: () => set((state) => ({ quickAddOpen: !state.quickAddOpen })),
+  searchFocused: false,
+  setSearchFocused: (focused) => set({ searchFocused: focused }),
 }));
