@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useUserTags } from "@/hooks/use-items";
+import { useUserTags, useFacetedTags } from "@/hooks/use-items";
 import { useFilterStore } from "@/store/filter-store";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -78,8 +78,8 @@ export function Sidebar() {
 }
 
 function TagList() {
-  const tags = useUserTags();
   const { selectedTags } = useFilterStore();
+  const tags = useFacetedTags(selectedTags);
   const handleTagAction = useTagAction();
 
   if (tags.length === 0) {

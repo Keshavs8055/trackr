@@ -1,6 +1,6 @@
 "use client";
 
-import { useItems, useUserTags } from "@/hooks/use-items";
+import { useItems, useUserTags, useFacetedTags } from "@/hooks/use-items";
 import { ItemCard } from "@/components/item-card";
 import { useFilterStore } from "@/store/filter-store";
 import { useTagAction } from "@/hooks/use-tag-action";
@@ -8,18 +8,57 @@ import { useAppStore } from "@/store/app-store";
 import { Search, X } from "lucide-react";
 import { LoadingState } from "@/components/ui/loading-state";
 import { cn } from "@/lib/utils";
-import React, { useDeferredValue, useRef, useEffect, useMemo } from "react";
+import React, { useDeferredValue, useRef, useEffect, useMemo, useState, useCallback } from "react";
+import { ItemDetails } from "@/components/item-details";
+import { Item } from "@/types";
 
 export default function Home() {
   const { data: items, isLoading } = useItems();
-  const globalTags = useUserTags();
+  const { searchQuery, setSearchQuery, selectedTags, toggleTag, clearFilters } = useFilterStore();
+  const globalTags = useFacetedTags(selectedTags);
   
-  const { searchQuery, setSearchQuery, selectedTags, clearFilters } = useFilterStore();
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const handleTagAction = useTagAction();
 
   const { searchFocused, setSearchFocused } = useAppStore();
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+
+  const handleOpenDetails = useCallback((item: Item) => {
+    setSelectedItem(item);
+  }, []);
+
+  // Intercept changes to search query to automatically extract matching hashtags
+  const handleSearchChange = (val: string) => {
+    let newVal = val;
+    let tagsToToggle: string[] = [];
+
+    // Parse the input for words starting with #
+    const words = val.split(/(\s+)/);
+    const updatedWords = words.map(word => {
+      if (word.startsWith("#") && word.length > 1) {
+        const cleanTag = word.slice(1).toLowerCase();
+        if (globalTags.includes(cleanTag)) {
+          tagsToToggle.push(cleanTag);
+          return "";
+        }
+      }
+      return word;
+    });
+
+    if (tagsToToggle.length > 0) {
+      tagsToToggle.forEach(tag => {
+        if (!selectedTags.includes(tag)) {
+          toggleTag(tag);
+        }
+      });
+      // Clean up spaces left by removed hashtags
+      newVal = updatedWords.join("").replace(/\s+/g, ' ').trim();
+    }
+    
+    setSearchQuery(newVal);
+  };
 
   // Focus search input when triggered from navigation
   useEffect(() => {
@@ -67,7 +106,7 @@ export default function Home() {
           <input 
             ref={searchInputRef}
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="Search memories or #tags..." 
             className="w-full pl-9 pr-9 h-10 rounded-lg bg-secondary/35 border border-border/40 outline-none text-sm focus:border-primary/40 focus:ring-0 transition-all placeholder:text-muted-foreground/50 font-medium"
           />
@@ -130,11 +169,18 @@ export default function Home() {
         ) : (
           <div className="flex flex-col">
             {filteredItems.map((item, i) => (
-              <ItemCard key={item.id} item={item} index={i} />
+              <ItemCard key={item.id} item={item} index={i} onOpenDetails={handleOpenDetails} />
             ))}
           </div>
         )}
       </main>
+
+      {/* Shared lifted details modal */}
+      <ItemDetails 
+        item={selectedItem} 
+        isOpen={!!selectedItem} 
+        onClose={() => setSelectedItem(null)} 
+      />
     </div>
   );
 }

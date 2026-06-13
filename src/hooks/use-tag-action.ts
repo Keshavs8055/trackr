@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useFilterStore } from '@/store/filter-store';
 
@@ -6,10 +7,10 @@ export function useTagAction() {
   const pathname = usePathname();
   const { toggleTag } = useFilterStore();
 
-  return (tag: string) => {
+  return useCallback((tag: string) => {
     toggleTag(tag);
     if (pathname !== '/') {
       router.push('/');
     }
-  };
+  }, [router, pathname, toggleTag]);
 }

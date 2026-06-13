@@ -19,22 +19,30 @@ export function ItemDetails({ item, isOpen, onClose }: ItemDetailsProps) {
   const { mutateAsync: updateItem, isPending: isUpdating } = useUpdateItem();
   const { mutateAsync: deleteItem, isPending: isDeleting } = useDeleteItem();
 
+  const [activeItem, setActiveItem] = useState<Item | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [notesValue, setNotesValue] = useState("");
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const editInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync inputs on open or item change
+  // Cache last selected item to preserve animations on close
   useEffect(() => {
     if (item) {
-      const tagsStr = item.tags ? item.tags.map(t => `#${t}`).join(" ") : "";
-      setEditValue(`${item.title} ${tagsStr}`.trim());
-      setNotesValue(item.notes || "");
+      setActiveItem(item);
+    }
+  }, [item]);
+
+  // Sync inputs on open or active item change
+  useEffect(() => {
+    if (activeItem && isOpen) {
+      const tagsStr = activeItem.tags ? activeItem.tags.map(t => `#${t}`).join(" ") : "";
+      setEditValue(`${activeItem.title} ${tagsStr}`.trim());
+      setNotesValue(activeItem.notes || "");
       setIsEditing(false);
       setIsConfirmingDelete(false);
     }
-  }, [item, isOpen]);
+  }, [activeItem, isOpen]);
 
   // Focus input when editing starts
   useEffect(() => {
@@ -43,23 +51,51 @@ export function ItemDetails({ item, isOpen, onClose }: ItemDetailsProps) {
     }
   }, [isEditing]);
 
-  if (!item) return null;
+  if (!activeItem) return null;
+
+  const handleNotesChange = (val: string) => {
+    const words = val.trim().split(/\s+/).filter(Boolean);
+    if (words.length <= 20) {
+      setNotesValue(val);
+    } else {
+      const wordsArray = val.split(/(\s+)/);
+      let wordCount = 0;
+      let truncateIndex = 0;
+      for (let i = 0; i < wordsArray.length; i++) {
+        if (wordsArray[i].trim().length > 0) {
+          wordCount++;
+        }
+        if (wordCount > 20) {
+          break;
+        }
+        truncateIndex += wordsArray[i].length;
+      }
+      setNotesValue(val.slice(0, truncateIndex));
+    }
+  };
 
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!editValue.trim() || isUpdating) return;
+    if (!editValue.trim() || isUpdating || !activeItem) return;
 
     const formattedTags = extractTags(editValue);
     const title = cleanTitle(editValue);
 
     try {
       await updateItem({
-        id: item.id,
+        id: activeItem.id,
         title,
         tags: formattedTags,
         rawInput: editValue,
         notes: notesValue.trim() || undefined
       });
+      setActiveItem(prev => prev ? {
+        ...prev,
+        title,
+        tags: formattedTags,
+        rawInput: editValue,
+        notes: notesValue.trim() || undefined
+      } : null);
       setIsEditing(false);
     } catch (err) {
       console.error("Failed to update item", err);
@@ -67,10 +103,11 @@ export function ItemDetails({ item, isOpen, onClose }: ItemDetailsProps) {
   };
 
   const handleToggleArchive = async () => {
+    if (!activeItem) return;
     try {
       await updateItem({
-        id: item.id,
-        archived: !item.archived
+        id: activeItem.id,
+        archived: !activeItem.archived
       });
       onClose();
     } catch (err) {
@@ -79,20 +116,21 @@ export function ItemDetails({ item, isOpen, onClose }: ItemDetailsProps) {
   };
 
   const handleDelete = async () => {
+    if (!activeItem) return;
     if (!isConfirmingDelete) {
       setIsConfirmingDelete(true);
       return;
     }
     try {
-      await deleteItem(item.id);
+      await deleteItem(activeItem.id);
       onClose();
     } catch (err) {
       console.error("Failed to delete item", err);
     }
   };
 
-  const relativeDate = item.createdAt 
-    ? formatDistanceToNow(new Date(item.createdAt), { addSuffix: true }) 
+  const relativeDate = activeItem.createdAt 
+    ? formatDistanceToNow(new Date(activeItem.createdAt), { addSuffix: true }) 
     : "";
 
   return (
@@ -119,7 +157,7 @@ export function ItemDetails({ item, isOpen, onClose }: ItemDetailsProps) {
             {/* Header */}
             <div className="px-5 py-4 flex items-center justify-between border-b border-border/30">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                {isEditing ? "Edit item" : item.archived ? "Archived item" : "Archive detail"}
+                {isEditing ? "Edit item" : activeItem.archived ? "Archived item" : "Archive detail"}
               </h2>
               <button 
                 onClick={onClose}
@@ -148,12 +186,17 @@ export function ItemDetails({ item, isOpen, onClose }: ItemDetailsProps) {
                   </div>
 
                   <div className="space-y-1">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                      Notes
-                    </span>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                        Notes (Optional)
+                      </span>
+                      <span className="text-[10px] font-semibold text-muted-foreground/50">
+                        {notesValue.trim().split(/\s+/).filter(Boolean).length}/20 words
+                      </span>
+                    </div>
                     <textarea
                       value={notesValue}
-                      onChange={(e) => setNotesValue(e.target.value)}
+                      onChange={(e) => handleNotesChange(e.target.value)}
                       placeholder="Add reflections, reminders, or details..."
                       rows={4}
                       className="w-full p-3 rounded-lg bg-secondary/30 border border-border/50 focus:border-primary focus:ring-0 outline-none transition-all text-sm resize-none"
@@ -165,12 +208,12 @@ export function ItemDetails({ item, isOpen, onClose }: ItemDetailsProps) {
                   {/* Title & Tags */}
                   <div className="space-y-2">
                     <h3 className="text-lg font-semibold text-foreground tracking-tight leading-snug">
-                      {item.title}
+                      {activeItem.title}
                     </h3>
                     
-                    {item.tags && item.tags.length > 0 && (
+                    {activeItem.tags && activeItem.tags.length > 0 && (
                       <div className="flex flex-wrap gap-2 pt-0.5">
-                        {item.tags.map(tag => (
+                        {activeItem.tags.map(tag => (
                           <span 
                             key={tag} 
                             className="text-xs font-semibold text-muted-foreground/80"
@@ -183,10 +226,10 @@ export function ItemDetails({ item, isOpen, onClose }: ItemDetailsProps) {
                   </div>
 
                   {/* Notes / Details */}
-                  {item.notes && (
+                  {activeItem.notes && (
                     <div className="bg-secondary/20 p-4 rounded-xl border border-border/30">
                       <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">
-                        {item.notes}
+                        {activeItem.notes}
                       </p>
                     </div>
                   )}
@@ -243,7 +286,7 @@ export function ItemDetails({ item, isOpen, onClose }: ItemDetailsProps) {
                       className="flex-1 h-10 rounded-lg text-xs gap-1.5"
                       onClick={handleToggleArchive}
                     >
-                      {item.archived ? "Unarchive" : "Archive"}
+                      {activeItem.archived ? "Unarchive" : "Archive"}
                     </Button>
                   </div>
 

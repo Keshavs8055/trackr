@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { collection, query, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, getDocs, addDoc, updateDoc, deleteDoc, doc, deleteField } from 'firebase/firestore';
 import { db } from '@/services/firebase';
 import { useAuth } from '@/components/auth-provider';
 import { Item, Collection } from '@/types';
@@ -104,13 +104,17 @@ export function useAddItem() {
     mutationFn: async (item: Omit<Item, 'id' | 'createdAt' | 'updatedAt' | 'userId'>) => {
       if (!user?.uid) throw new Error("Must be logged in to add item");
 
-      const newItemData = {
+      const newItemData: any = {
         ...item,
         userId: user.uid,
         createdAt: Date.now(),
         updatedAt: Date.now(),
         archived: false,
       };
+
+      if (!newItemData.notes || newItemData.notes.trim() === '') {
+        delete newItemData.notes;
+      }
 
       if (user.uid === 'mock-user-id') {
         const stored = localStorage.getItem('mock-items');
@@ -138,16 +142,39 @@ export function useUpdateItem() {
     mutationFn: async ({ id, ...update }: { id: string } & Partial<Item>) => {
       if (!user?.uid) throw new Error("Must be logged in");
 
+      const cleanUpdate: any = { ...update };
+      
+      // Remove notes completely from the update item and backend if empty or cleared
+      const hasNotesProp = 'notes' in cleanUpdate;
+      const isNotesEmpty = hasNotesProp && (!cleanUpdate.notes || cleanUpdate.notes.trim() === '');
+      
+      if (isNotesEmpty) {
+        if (user.uid === 'mock-user-id') {
+          delete cleanUpdate.notes;
+        } else {
+          cleanUpdate.notes = deleteField();
+        }
+      }
+
       if (user.uid === 'mock-user-id') {
         const stored = localStorage.getItem('mock-items');
         const items: Item[] = stored ? JSON.parse(stored) : DEFAULT_MOCK_ITEMS;
-        const updated = items.map(item => item.id === id ? { ...item, ...update, updatedAt: Date.now() } : item);
+        const updated = items.map(item => {
+          if (item.id === id) {
+            const newItem = { ...item, ...cleanUpdate, updatedAt: Date.now() };
+            if (isNotesEmpty) {
+              delete newItem.notes;
+            }
+            return newItem;
+          }
+          return item;
+        });
         localStorage.setItem('mock-items', JSON.stringify(updated));
         return;
       }
 
       const docRef = doc(db, 'users', user.uid, 'items', id);
-      await updateDoc(docRef, { ...update, updatedAt: Date.now() });
+      await updateDoc(docRef, { ...cleanUpdate, updatedAt: Date.now() });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['items'] });
@@ -196,4 +223,40 @@ export function useUserTags() {
     
     return Array.from(tagSet).sort();
   }, [items]);
+}
+
+// Helper hook to get faceted tags based on selected tag filters
+export function useFacetedTags(selectedTags: string[]) {
+  const { data: items } = useItems();
+  
+  return useMemo(() => {
+    if (!items) return [];
+    
+    const globalTagSet = new Set<string>();
+    items.forEach(item => {
+      if (!item.archived) {
+        item.tags?.forEach(tag => globalTagSet.add(tag));
+      }
+    });
+    
+    if (selectedTags.length === 0) {
+      return Array.from(globalTagSet).sort();
+    }
+    
+    // Find items that match ALL of the currently selected tags
+    const matchingItems = items.filter(item => 
+      !item.archived && selectedTags.every(t => item.tags?.includes(t))
+    );
+    
+    // Extract unique tags from these matching items
+    const facetedTagSet = new Set<string>();
+    matchingItems.forEach(item => {
+      item.tags?.forEach(tag => facetedTagSet.add(tag));
+    });
+    
+    // Ensure all selected tags remain in the list so they can be deselected
+    selectedTags.forEach(tag => facetedTagSet.add(tag));
+    
+    return Array.from(facetedTagSet).sort();
+  }, [items, selectedTags]);
 }

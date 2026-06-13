@@ -13,11 +13,22 @@ export function QuickAdd() {
   const { quickAddOpen, setQuickAddOpen } = useAppStore();
   const [inputValue, setInputValue] = React.useState("");
   const [isSaving, setIsSaving] = React.useState(false);
+  const [isTypingTag, setIsTypingTag] = React.useState(false);
+  const [searchTag, setSearchTag] = React.useState("");
   
   const { mutateAsync: addItem } = useAddItem();
   const globalTags = useUserTags();
   
   const inputRef = React.useRef<HTMLInputElement>(null);
+
+  // Clean states when modal is closed
+  React.useEffect(() => {
+    if (!quickAddOpen) {
+      setInputValue("");
+      setIsTypingTag(false);
+      setSearchTag("");
+    }
+  }, [quickAddOpen]);
 
   // Keyboard shortcut (Cmd+K or Ctrl+K) to toggle
   React.useEffect(() => {
@@ -44,27 +55,37 @@ export function QuickAdd() {
     }
   }, [quickAddOpen]);
 
-  // Extract cursor and tag typing state
-  const getCursorAndTagState = () => {
-    if (!inputRef.current) return { isTypingTag: false, searchTag: "", cursorIndex: 0 };
-    const cursorIndex = inputRef.current.selectionStart || 0;
-    const textBeforeCursor = inputValue.slice(0, cursorIndex);
+  // Extract cursor and tag typing state (moved out of render to resolve Firefox lag)
+  const updateTypingState = (inputEl: HTMLInputElement | null) => {
+    if (!inputEl) {
+      setIsTypingTag(false);
+      setSearchTag("");
+      return;
+    }
+    const val = inputEl.value;
+    const cursorIndex = inputEl.selectionStart || 0;
+    const textBeforeCursor = val.slice(0, cursorIndex);
     const words = textBeforeCursor.split(/\s+/);
     const currentWord = words[words.length - 1] || "";
-    const isTypingTag = currentWord.startsWith("#");
-    const searchTag = isTypingTag ? formatTag(currentWord) : "";
-    return { isTypingTag, searchTag, cursorIndex };
+    const isTyping = currentWord.startsWith("#");
+    const search = isTyping ? formatTag(currentWord) : "";
+    
+    setIsTypingTag(isTyping);
+    setSearchTag(search);
   };
 
-  const { isTypingTag, searchTag } = getCursorAndTagState();
-
-  const suggestedTags = React.useMemo(() => {
-    if (!isTypingTag) return [];
+  const availableTags = React.useMemo(() => {
+    // Extract already entered tags to hide them from the default suggested list
     const extractedCurrently = (inputValue.match(HASHTAG_REGEX) || []).map(formatTag);
-    
-    return globalTags.filter(tag => 
-      tag.includes(searchTag) && !extractedCurrently.includes(tag)
-    ).slice(0, 5);
+    if (isTypingTag) {
+      const extractedWithoutCurrent = extractedCurrently.filter(t => t !== searchTag);
+      return globalTags.filter(tag => 
+        tag.includes(searchTag) && !extractedWithoutCurrent.includes(tag)
+      ).slice(0, 5);
+    } else {
+      // By default show tags not already present
+      return globalTags.filter(tag => !extractedCurrently.includes(tag)).slice(0, 8);
+    }
   }, [globalTags, searchTag, isTypingTag, inputValue]);
 
   const handleSelectTag = (tag: string) => {
@@ -87,20 +108,37 @@ export function QuickAdd() {
       if (inputRef.current) {
         inputRef.current.focus();
         inputRef.current.setSelectionRange(newCursorPos, newCursorPos);
+        updateTypingState(inputRef.current);
+      }
+    }, 10);
+  };
+
+  const handleAppendTag = (tag: string) => {
+    const trimmed = inputValue.trim();
+    const separator = trimmed ? " " : "";
+    const newText = `${trimmed}${separator}#${tag} `;
+    
+    setInputValue(newText);
+    
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        const len = newText.length;
+        inputRef.current.setSelectionRange(len, len);
+        updateTypingState(inputRef.current);
       }
     }, 10);
   };
 
   const handleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
-      if (!isTypingTag) {
-        e.preventDefault();
-        await handleSave();
-      }
+      e.preventDefault();
+      await handleSave();
     } else if (e.key === " ") {
       if (isTypingTag && searchTag.length > 0) {
         e.preventDefault();
-        handleSelectTag(searchTag);
+        const tagToAssign = availableTags.length > 0 ? availableTags[0] : searchTag;
+        handleSelectTag(tagToAssign);
       }
     } else if (e.key === "Escape") {
       setQuickAddOpen(false);
@@ -133,7 +171,7 @@ export function QuickAdd() {
   return (
     <AnimatePresence>
       {quickAddOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 backdrop-blur-xs md:items-center p-0 md:p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/35 backdrop-blur-xs md:items-center p-4 pt-12 md:p-4 animate-in fade-in duration-200">
           {/* Backdrop Click */}
           <motion.div 
             initial={{ opacity: 0 }}
@@ -145,11 +183,11 @@ export function QuickAdd() {
 
           {/* Quick Add Modal */}
           <motion.div
-            initial={{ y: "100%", opacity: 0.8 }}
+            initial={{ y: -40, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: "100%", opacity: 0.8 }}
-            transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className="relative z-10 w-full max-w-lg bg-card border-t border-x border-border md:border md:rounded-2xl rounded-t-2xl shadow-xl flex flex-col overflow-hidden pb-safe"
+            exit={{ y: -40, opacity: 0 }}
+            transition={{ type: "spring", damping: 25, stiffness: 350 }}
+            className="relative z-10 w-full max-w-lg bg-card border border-border rounded-2xl shadow-xl flex flex-col overflow-hidden"
           >
             <Command className="flex flex-col w-full" shouldFilter={false}>
               {/* Input row */}
@@ -157,7 +195,16 @@ export function QuickAdd() {
                 <input
                   ref={inputRef}
                   value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
+                  onChange={(e) => {
+                    setInputValue(e.target.value);
+                    updateTypingState(e.target);
+                  }}
+                  onKeyUp={(e) => {
+                    updateTypingState(e.currentTarget);
+                  }}
+                  onSelect={(e) => {
+                    updateTypingState(e.currentTarget);
+                  }}
                   onKeyDown={handleKeyDown}
                   placeholder="Flowers for Algernon #books #great"
                   className="flex-1 h-12 bg-transparent outline-none border-none placeholder:text-muted-foreground/60 text-sm font-medium pr-3"
@@ -178,24 +225,24 @@ export function QuickAdd() {
                 )}
               </div>
               
-              {/* Suggested Tags (Autotargets) */}
-              {isTypingTag && (
+              {/* Suggested Tags (Autotargets) / Collections by Default */}
+              {globalTags.length > 0 && (
                 <div className="border-b border-border/30 max-h-[160px] overflow-y-auto p-2 bg-secondary/5">
                   <div className="px-1 pb-1.5 text-[9px] font-bold text-muted-foreground/60 uppercase tracking-widest flex items-center gap-1">
-                    <Hash className="size-2.5" /> Suggested Tags
+                    <Hash className="size-2.5" /> {isTypingTag ? "Suggested Tags" : "Quick Add Tags"}
                   </div>
                   <div className="flex flex-wrap gap-1.5 p-0.5">
-                    {suggestedTags.map((tag) => (
+                    {availableTags.map((tag) => (
                       <button
                         key={tag}
                         type="button"
-                        onClick={() => handleSelectTag(tag)}
+                        onClick={() => isTypingTag ? handleSelectTag(tag) : handleAppendTag(tag)}
                         className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-secondary text-xs font-medium hover:bg-primary/10 hover:text-primary transition-all"
                       >
                         #{tag}
                       </button>
                     ))}
-                    {suggestedTags.length === 0 && searchTag.length > 0 && (
+                    {isTypingTag && availableTags.length === 0 && searchTag.length > 0 && (
                       <button
                         type="button"
                         onClick={() => handleSelectTag(searchTag)}
@@ -203,6 +250,9 @@ export function QuickAdd() {
                       >
                         Add: #{searchTag}
                       </button>
+                    )}
+                    {!isTypingTag && availableTags.length === 0 && (
+                      <span className="text-[10px] text-muted-foreground/40 italic px-1">All tags assigned</span>
                     )}
                   </div>
                 </div>
@@ -226,14 +276,14 @@ export function QuickAdd() {
                   )}
                 </div>
                 
-                {inputValue.trim().length > 0 && !isTypingTag && (
+                {inputValue.trim().length > 0 && (
                   <button
                     onClick={handleSave}
                     disabled={isSaving}
-                    className="flex items-center gap-1 px-2.5 h-7 rounded bg-primary text-primary-foreground font-semibold text-[10px] active:scale-95 transition-transform"
+                    className="flex items-center gap-1.5 px-3 h-8 rounded-lg bg-primary text-primary-foreground font-semibold text-xs active:scale-95 transition-transform shadow-sm flex-shrink-0"
                   >
                     <span>Save</span>
-                    <CornerDownLeft className="size-3" />
+                    <CornerDownLeft className="size-3.5 md:block hidden" />
                   </button>
                 )}
               </div>
