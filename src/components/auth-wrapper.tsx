@@ -5,6 +5,7 @@ import { MainLayout } from "@/components/layout/main-layout";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { Logo } from "@/components/ui/logo";
 
 export function AuthWrapper({ children }: { children: React.ReactNode }) {
   const { user, loading, signInWithGoogle, signInWithMock } = useAuth();
@@ -27,11 +28,12 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: "easeOut" }}
-          className="z-10 flex max-w-md flex-col items-center space-y-8 text-center"
+          className="z-10 flex max-w-md flex-col items-center space-y-6 text-center"
         >
-            <h1 className="text-4xl font-semibold tracking-tight text-foreground">
-              Trackr
-            </h1>
+          <Logo className="size-14 text-foreground" />
+          <h1 className="text-4xl font-bold tracking-tight text-foreground">
+            Trackr
+          </h1>
           <p className="text-sm max-w-sm p-0 m-2">
             A simple app built with &#x2764;&#xFE0F; by <b>Keshav Sharma</b>
           </p>

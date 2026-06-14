@@ -5,9 +5,10 @@ import { ItemCard } from "@/components/item-card";
 import { useFilterStore } from "@/store/filter-store";
 import { useTagAction } from "@/hooks/use-tag-action";
 import { useAppStore } from "@/store/app-store";
-import { Search, X } from "lucide-react";
+import { Search, X, WifiOff, RefreshCw } from "lucide-react";
 import { LoadingState } from "@/components/ui/loading-state";
 import { cn } from "@/lib/utils";
+import { Logo } from "@/components/ui/logo";
 import React, { useDeferredValue, useRef, useEffect, useMemo, useState, useCallback } from "react";
 import { ItemDetails } from "@/components/item-details";
 import { Item } from "@/types";
@@ -100,6 +101,15 @@ export default function Home() {
     <div className="space-y-6 pb-20 md:pb-8 max-w-2xl mx-auto">
       {/* Sticky Header: Minimal Search & Tag Filters */}
       <header className="sticky top-0 z-30 bg-background/95 backdrop-blur-md pt-2 pb-4 -mx-4 px-4 border-b border-border/30 space-y-3.5">
+        {/* Mobile App Bar */}
+        <div className="flex md:hidden items-center justify-between py-1 px-0.5">
+          <div className="flex items-center gap-2">
+            <Logo className="size-5 text-foreground" />
+            <span className="text-sm font-bold tracking-tight">Trackr</span>
+          </div>
+          <ConnectionStatus />
+        </div>
+
         {/* Search Field */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground/50" />
@@ -183,4 +193,29 @@ export default function Home() {
       />
     </div>
   );
+}
+
+function ConnectionStatus() {
+  const isOnline = useAppStore(s => s.isOnline);
+  const hasPendingWrites = useAppStore(s => s.hasPendingWrites);
+
+  if (!isOnline) {
+    return (
+      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-destructive/10 text-destructive border border-destructive/20 text-[9px] font-bold animate-pulse flex-shrink-0">
+        <WifiOff className="size-2.5" />
+        <span>Offline</span>
+      </div>
+    );
+  }
+
+  if (hasPendingWrites) {
+    return (
+      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[9px] font-bold flex-shrink-0">
+        <RefreshCw className="size-2.5 animate-spin" />
+        <span>Syncing...</span>
+      </div>
+    );
+  }
+
+  return null;
 }

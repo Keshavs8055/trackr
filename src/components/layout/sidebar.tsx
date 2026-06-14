@@ -9,21 +9,47 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/components/auth-provider";
 import { useAppStore } from "@/store/app-store";
 import { useTagAction } from "@/hooks/use-tag-action";
-import { Archive, Plus, LogOut } from "lucide-react";
+import { Archive, Plus, LogOut, Download, WifiOff, RefreshCw } from "lucide-react";
+import { Logo } from "@/components/ui/logo";
 
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const setQuickAddOpen = useAppStore(s => s.setQuickAddOpen);
+  const installPrompt = useAppStore(s => s.installPrompt);
+  const setInstallPrompt = useAppStore(s => s.setInstallPrompt);
+
+  const handleInstallClick = async () => {
+    if (!installPrompt) return;
+    try {
+      installPrompt.prompt();
+      const { outcome } = await installPrompt.userChoice;
+      console.log(`User choice outcome: ${outcome}`);
+    } catch (err) {
+      console.error("Failed to prompt installation:", err);
+    } finally {
+      setInstallPrompt(null);
+    }
+  };
 
   return (
     <aside className="hidden md:flex w-60 flex-col border-r border-border/40 bg-background h-full p-5 justify-between">
       <div className="flex-1 space-y-8 overflow-y-auto pr-1">
         {/* Logo/Header */}
-        <div className="py-2">
-          <span className="text-base font-semibold tracking-tight text-foreground/90">
-            {user?.displayName ? `${user.displayName.split(' ')[0]}'s Archive` : "Personal Archive"}
-          </span>
+        <div className="py-2 space-y-1.5">
+          <div className="flex items-center gap-2">
+            <Logo className="size-6 text-foreground" />
+            <span className="text-base font-bold tracking-tight text-foreground">
+              Trackr
+            </span>
+            <span className="text-[9px] bg-secondary px-1.5 py-0.5 rounded text-muted-foreground/80 font-normal">v0.1.0</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground/75 truncate pr-1">
+              {user?.displayName ? `${user.displayName.split(' ')[0]}'s Archive` : "Personal Archive"}
+            </span>
+            <ConnectionStatus />
+          </div>
         </div>
 
         {/* Main Nav */}
@@ -52,7 +78,17 @@ export function Sidebar() {
       </div>
 
       {/* Footer Controls */}
-      <div className="pt-4 border-t border-border/40 space-y-3.5">
+      <div className="pt-4 border-t border-border/40 space-y-3">
+        {installPrompt && (
+          <button 
+            onClick={handleInstallClick}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary/35 text-foreground h-9 text-xs font-semibold hover:bg-secondary/60 active:scale-98 transition-all"
+          >
+            <Download className="size-3.5" />
+            <span>Install App</span>
+          </button>
+        )}
+
         <button 
           onClick={() => setQuickAddOpen(true)}
           className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary text-primary-foreground h-9 text-xs font-semibold hover:opacity-90 active:scale-98 transition-all"
@@ -108,4 +144,29 @@ function TagList() {
       })}
     </div>
   );
+}
+
+function ConnectionStatus() {
+  const isOnline = useAppStore(s => s.isOnline);
+  const hasPendingWrites = useAppStore(s => s.hasPendingWrites);
+
+  if (!isOnline) {
+    return (
+      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-destructive/10 text-destructive border border-destructive/20 text-[9px] font-bold animate-pulse flex-shrink-0">
+        <WifiOff className="size-2.5" />
+        <span>Offline</span>
+      </div>
+    );
+  }
+
+  if (hasPendingWrites) {
+    return (
+      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[9px] font-bold flex-shrink-0">
+        <RefreshCw className="size-2.5 animate-spin" />
+        <span>Syncing...</span>
+      </div>
+    );
+  }
+
+  return null;
 }

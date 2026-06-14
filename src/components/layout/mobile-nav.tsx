@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Archive, Search, Plus, User, X, LogOut } from "lucide-react";
+import { Archive, Search, Plus, User, X, LogOut, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
 import { useFilterStore } from "@/store/filter-store";
@@ -106,10 +106,34 @@ function ProfileDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
   const { user, logout } = useAuth();
   const router = useRouter();
 
+  const [isIOS, setIsIOS] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const installPrompt = useAppStore(s => s.installPrompt);
+  const setInstallPrompt = useAppStore(s => s.setInstallPrompt);
+
+  useEffect(() => {
+    setIsIOS(/iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream);
+    setIsStandalone(window.matchMedia('(display-mode: standalone)').matches);
+  }, []);
+
   const handleLogout = async () => {
     onClose();
     await logout();
     router.push("/");
+  };
+
+  const handleInstallClick = async () => {
+    if (!installPrompt) return;
+    try {
+      installPrompt.prompt();
+      const { outcome } = await installPrompt.userChoice;
+      console.log(`User choice outcome: ${outcome}`);
+    } catch (err) {
+      console.error("Failed to prompt PWA install:", err);
+    } finally {
+      setInstallPrompt(null);
+      onClose();
+    }
   };
 
   if (!user) return null;
@@ -158,6 +182,26 @@ function ProfileDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
 
             {/* Options */}
             <div className="px-5 pb-5 space-y-3">
+              {installPrompt && (
+                <Button 
+                  variant="outline" 
+                  className="w-full h-10 rounded-xl text-xs font-bold gap-1.5 border border-border bg-secondary/20 hover:bg-secondary/45"
+                  onClick={handleInstallClick}
+                >
+                  <Download className="size-3.5" />
+                  Install App
+                </Button>
+              )}
+
+              {isIOS && !isStandalone && (
+                <div className="p-3 rounded-xl bg-secondary/15 border border-border/15 text-[10px] text-muted-foreground leading-normal space-y-1">
+                  <div className="font-bold uppercase text-[9px] tracking-wider text-foreground">Install on iOS</div>
+                  <p>
+                    Tap the share button <span className="font-bold">⎋</span> and select <span className="font-bold">Add to Home Screen</span> <span className="font-bold">➕</span> to run Trackr as a native app.
+                  </p>
+                </div>
+              )}
+
               <div className="flex items-center justify-between p-3 rounded-xl bg-secondary/20 border border-border/20">
                 <span className="text-xs font-semibold">Theme</span>
                 <ThemeToggle />

@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/components/auth-provider";
 import { AuthWrapper } from "@/components/auth-wrapper";
+import { PwaProvider } from "@/components/pwa-provider";
 import QueryProvider from "@/components/query-provider";
 import "./globals.css";
 
@@ -12,8 +13,16 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Archive",
+  title: "Trackr",
   description: "A personal memory, experience, and consumption tracking system.",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" }
+    ],
+    apple: "/apple-icon.png",
+  },
 };
 
 export default function RootLayout({
@@ -32,7 +41,9 @@ export default function RootLayout({
         >
           <QueryProvider>
             <AuthProvider>
-              <AuthWrapper>{children}</AuthWrapper>
+              <PwaProvider>
+                <AuthWrapper>{children}</AuthWrapper>
+              </PwaProvider>
             </AuthProvider>
           </QueryProvider>
         </ThemeProvider>
