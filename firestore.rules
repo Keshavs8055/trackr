@@ -1,0 +1,19 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // User data tree: Authenticated user has full access to their own data tree
+    match /users/{userId} {
+
+      // User root document
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // Allow access to all subcollections under /users/{userId}
+      // This covers: /resources, /items (legacy), /collections, /audit_logs, /notes, /activities, etc.
+      match /{document=**} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+  }
+}

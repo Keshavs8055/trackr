@@ -1,0 +1,469 @@
+import { 
+  collection, 
+  query, 
+  getDocs, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  deleteField,
+  writeBatch
+} from 'firebase/firestore';
+import { db } from '@/services/firebase';
+import { PROVIDERS, Resource, ResourceProviderMetadata, RESOURCE_TYPES, ResourceType } from '@/types';
+import { AppError } from '@/lib/app-error';
+import { ResourceFactory } from '@/domain/resource/resource-factory';
+import { SearchIndexBuilder } from '@/domain/search/search-index-builder';
+import { EventBus } from '@/domain/events/event-bus';
+
+const DEFAULT_MOCK_RESOURCES: Resource[] = [
+  {
+    id: "mock-resource-1",
+    userId: "mock-user-id",
+    title: "Interstellar",
+    type: RESOURCE_TYPES.MOVIE,
+    providerMetadata: {
+      provider: PROVIDERS.MANUAL,
+      metadata: {},
+      version: 1,
+    },
+    provider: PROVIDERS.MANUAL,
+    tags: ["movies", "fav"],
+    rawInput: "Interstellar #movies #fav",
+    notes: "A beautiful sci-fi exploration of time and love.",
+    metadata: {},
+    createdAt: Date.now() - 1000 * 60 * 60 * 24 * 3,
+    updatedAt: Date.now() - 1000 * 60 * 60 * 24 * 3,
+  },
+  {
+    id: "mock-resource-2",
+    userId: "mock-user-id",
+    title: "Dune: Part Two",
+    type: RESOURCE_TYPES.MOVIE,
+    providerMetadata: {
+      provider: PROVIDERS.MANUAL,
+      metadata: {},
+      version: 1,
+    },
+    provider: PROVIDERS.MANUAL,
+    tags: ["movies", "scifi"],
+    rawInput: "Dune: Part Two #movies #scifi",
+    notes: "Visually stunning continuation of the desert saga.",
+    metadata: {},
+    createdAt: Date.now() - 1000 * 60 * 60 * 24 * 5,
+    updatedAt: Date.now() - 1000 * 60 * 60 * 24 * 5,
+  },
+  {
+    id: "mock-resource-3",
+    userId: "mock-user-id",
+    title: "Atomic Habits by James Clear",
+    type: RESOURCE_TYPES.BOOK,
+    providerMetadata: {
+      provider: PROVIDERS.MANUAL,
+      metadata: {},
+      version: 1,
+    },
+    provider: PROVIDERS.MANUAL,
+    tags: ["books", "productivity"],
+    rawInput: "Atomic Habits by James Clear #books #productivity",
+    notes: "An easy way to build good habits and break bad ones.",
+    metadata: {},
+    createdAt: Date.now() - 1000 * 60 * 60 * 24 * 7,
+    updatedAt: Date.now() - 1000 * 60 * 60 * 24 * 7,
+  },
+  {
+    id: "mock-resource-4",
+    userId: "mock-user-id",
+    title: "Kyoto Tempura Spots",
+    type: RESOURCE_TYPES.NOTE,
+    providerMetadata: {
+      provider: PROVIDERS.MANUAL,
+      metadata: {},
+      version: 1,
+    },
+    provider: PROVIDERS.MANUAL,
+    tags: ["travel", "food"],
+    rawInput: "Kyoto Tempura Spots #travel #food",
+    notes: "Amazing tempura in Gion district.",
+    metadata: {},
+    createdAt: Date.now() - 1000 * 60 * 60 * 24 * 10,
+    updatedAt: Date.now() - 1000 * 60 * 60 * 24 * 10,
+  },
+  {
+    id: "mock-resource-5",
+    userId: "mock-user-id",
+    title: "Inception",
+    type: RESOURCE_TYPES.MOVIE,
+    providerMetadata: {
+      provider: PROVIDERS.MANUAL,
+      metadata: {},
+      version: 1,
+    },
+    provider: PROVIDERS.MANUAL,
+    tags: ["movies", "fav"],
+    rawInput: "Inception #movies #fav",
+    notes: "Mind-bending dream heist movie.",
+    metadata: {},
+    createdAt: Date.now() - 1000 * 60 * 60 * 24 * 12,
+    updatedAt: Date.now() - 1000 * 60 * 60 * 24 * 12,
+  }
+];
+
+export class ResourceService {
+  /**
+   * Fetches resources for a user.
+   * Performs a one-time lazy migration from legacy 'items' subcollection if resources is empty.
+   */
+  public async getResources(userId: string): Promise<Resource[]> {
+    if (!userId) return [];
+
+    // 1. Mock user support
+    if (userId === 'mock-user-id') {
+      return this.getMockResources();
+    }
+
+    try {
+      const resourcesRef = collection(db, 'users', userId, 'resources');
+      const q = query(resourcesRef);
+      const snapshot = await getDocs(q);
+
+      let resources = snapshot.docs.map(doc => this.normalizeResource(doc.id, userId, doc.data()));
+
+      // 2. One-time lazy migration check if resources subcollection is empty
+      const migrationKey = `trackr_migrated_resources_${userId}`;
+      const isAlreadyMigrated = typeof window !== 'undefined' && localStorage.getItem(migrationKey) === 'true';
+
+      if (resources.length === 0 && !isAlreadyMigrated) {
+        resources = await this.migrateLegacyItems(userId);
+      }
+
+      resources.sort((a, b) => b.createdAt - a.createdAt);
+      return resources;
+    } catch (err) {
+      console.error("Error fetching resources:", err);
+      throw AppError.fromError(err);
+    }
+  }
+
+  public async addResource(
+    userId: string, 
+    resourceInput: Omit<Resource, 'id' | 'createdAt' | 'updatedAt' | 'userId'>
+  ): Promise<Resource> {
+    if (!userId) throw AppError.authRequired();
+
+    const now = Date.now();
+    const providerName = resourceInput.providerMetadata?.provider || resourceInput.provider || PROVIDERS.MANUAL;
+    const providerId = resourceInput.providerMetadata?.providerId || resourceInput.providerId;
+    const metadata = resourceInput.providerMetadata?.metadata || resourceInput.metadata || {};
+
+    const providerMetadata: ResourceProviderMetadata = resourceInput.providerMetadata || {
+      provider: providerName,
+      providerId,
+      metadata,
+      version: resourceInput.metadataVersion || 1,
+      source: resourceInput.metadataSource,
+      lastSynced: resourceInput.lastSynced,
+      providerUpdatedAt: resourceInput.providerUpdatedAt,
+    };
+
+    const newResourceData: Omit<Resource, 'id'> = {
+      ...resourceInput,
+      userId,
+      type: resourceInput.type || RESOURCE_TYPES.NOTE,
+      createdAt: now,
+      updatedAt: now,
+      providerMetadata,
+      // Legacy fields for Firestore & backward compatibility
+      provider: providerName,
+      providerId,
+      metadata,
+      metadataVersion: providerMetadata.version,
+      metadataSource: providerMetadata.source,
+      lastSynced: providerMetadata.lastSynced,
+      providerUpdatedAt: providerMetadata.providerUpdatedAt,
+    };
+
+    const searchIndex = SearchIndexBuilder.buildSearchIndex(newResourceData);
+
+    const finalResourceData: Omit<Resource, 'id'> = {
+      ...newResourceData,
+      searchIndex,
+    };
+
+    if (!finalResourceData.notes || finalResourceData.notes.trim() === '') {
+      delete finalResourceData.notes;
+    }
+
+    // Mock User flow
+    if (userId === 'mock-user-id') {
+      const current = this.getMockResources();
+      const newResource: Resource = {
+        id: `mock-resource-${now}`,
+        ...finalResourceData,
+      };
+      current.unshift(newResource);
+      localStorage.setItem('mock-resources', JSON.stringify(current));
+      EventBus.getInstance().publish('ResourceCreated', { resourceId: newResource.id, userId, resource: newResource });
+      return newResource;
+    }
+
+    // Recursively strip undefined values to ensure Firestore compatibility
+    const cleanFirestoreData = (obj: any): any => {
+      if (obj === null || typeof obj !== 'object') return obj;
+      if (Array.isArray(obj)) return obj.map(cleanFirestoreData);
+      const cleaned: Record<string, any> = {};
+      for (const [key, value] of Object.entries(obj)) {
+        if (value !== undefined) {
+          cleaned[key] = cleanFirestoreData(value);
+        }
+      }
+      return cleaned;
+    };
+
+    const finalPayload = cleanFirestoreData(newResourceData);
+
+    try {
+      const docRef = await addDoc(collection(db, 'users', userId, 'resources'), finalPayload);
+      return {
+        id: docRef.id,
+        ...newResourceData,
+      };
+    } catch (err) {
+      console.error("Error adding resource:", err);
+      throw AppError.fromError(err);
+    }
+  }
+
+  public async updateResource(
+    userId: string,
+    id: string,
+    update: Partial<Resource>
+  ): Promise<void> {
+    if (!userId) throw AppError.authRequired();
+
+    const cleanUpdate: Record<string, unknown> = { ...update, updatedAt: Date.now() };
+
+    // Sync providerMetadata if legacy metadata or provider is passed
+    if (cleanUpdate.providerMetadata) {
+      const pMeta = cleanUpdate.providerMetadata as ResourceProviderMetadata;
+      cleanUpdate.provider = pMeta.provider;
+      cleanUpdate.providerId = pMeta.providerId;
+      cleanUpdate.metadata = pMeta.metadata;
+      cleanUpdate.metadataVersion = pMeta.version;
+      cleanUpdate.metadataSource = pMeta.source;
+      cleanUpdate.lastSynced = pMeta.lastSynced;
+      cleanUpdate.providerUpdatedAt = pMeta.providerUpdatedAt;
+    } else if (cleanUpdate.metadata || cleanUpdate.provider) {
+      cleanUpdate.providerMetadata = {
+        provider: (cleanUpdate.provider as string) || PROVIDERS.MANUAL,
+        providerId: cleanUpdate.providerId as string | undefined,
+        metadata: (cleanUpdate.metadata as Record<string, unknown>) || {},
+        version: cleanUpdate.metadataVersion as number | undefined,
+        source: cleanUpdate.metadataSource as any,
+        lastSynced: cleanUpdate.lastSynced as number | undefined,
+        providerUpdatedAt: cleanUpdate.providerUpdatedAt as number | undefined,
+      };
+    }
+
+    const hasNotesProp = 'notes' in cleanUpdate;
+    const isNotesEmpty = hasNotesProp && (!cleanUpdate.notes || (cleanUpdate.notes as string).trim() === '');
+
+    if (isNotesEmpty) {
+      if (userId === 'mock-user-id') {
+        delete cleanUpdate.notes;
+      } else {
+        cleanUpdate.notes = deleteField();
+      }
+    }
+
+    if (userId === 'mock-user-id') {
+      const current = this.getMockResources();
+      const updated = current.map(item => {
+        if (item.id === id) {
+          const newItem = { ...item, ...cleanUpdate } as Resource;
+          if (isNotesEmpty) delete newItem.notes;
+          return newItem;
+        }
+        return item;
+      });
+      localStorage.setItem('mock-resources', JSON.stringify(updated));
+      return;
+    }
+
+    const cleanFirestoreData = (obj: any): any => {
+      if (obj === null || typeof obj !== 'object') return obj;
+      if (Array.isArray(obj)) return obj.map(cleanFirestoreData);
+      const cleaned: Record<string, any> = {};
+      for (const [key, value] of Object.entries(obj)) {
+        if (value !== undefined) {
+          cleaned[key] = cleanFirestoreData(value);
+        }
+      }
+      return cleaned;
+    };
+
+    const finalUpdatePayload = cleanFirestoreData(cleanUpdate);
+
+    try {
+      const docRef = doc(db, 'users', userId, 'resources', id);
+      await updateDoc(docRef, finalUpdatePayload);
+    } catch (err) {
+      console.error("Error updating resource:", err);
+      throw AppError.fromError(err);
+    }
+  }
+
+  public async deleteResource(userId: string, id: string): Promise<void> {
+    if (!userId) throw AppError.authRequired();
+
+    if (userId === 'mock-user-id') {
+      const current = this.getMockResources();
+      const filtered = current.filter(r => r.id !== id);
+      localStorage.setItem('mock-resources', JSON.stringify(filtered));
+      return;
+    }
+
+    try {
+      await deleteDoc(doc(db, 'users', userId, 'resources', id));
+    } catch (err) {
+      console.error("Error deleting resource:", err);
+      throw AppError.fromError(err);
+    }
+  }
+
+  /**
+   * Normalizes raw Firestore object to Resource
+   */
+  private normalizeResource(id: string, userId: string, data: any): Resource {
+    const rawProviderMeta = data.providerMetadata;
+    const provider = rawProviderMeta?.provider || data.provider || PROVIDERS.MANUAL;
+    const providerId = rawProviderMeta?.providerId || data.providerId || undefined;
+    const metadata = rawProviderMeta?.metadata || (data.metadata && typeof data.metadata === 'object' ? data.metadata : {});
+    const metadataVersion = rawProviderMeta?.version || data.metadataVersion || undefined;
+    const metadataSource = rawProviderMeta?.source || data.metadataSource || undefined;
+    const lastSynced = rawProviderMeta?.lastSynced || data.lastSynced || undefined;
+    const providerUpdatedAt = rawProviderMeta?.providerUpdatedAt || data.providerUpdatedAt || undefined;
+
+    const providerMetadata: ResourceProviderMetadata = {
+      provider,
+      providerId,
+      metadata,
+      version: metadataVersion,
+      source: metadataSource,
+      lastSynced,
+      providerUpdatedAt,
+    };
+
+    return {
+      id,
+      userId,
+      title: data.title || 'Untitled Resource',
+      type: (data.type as ResourceType) || RESOURCE_TYPES.NOTE,
+      status: data.status || undefined,
+      notes: data.notes || undefined,
+      tags: Array.isArray(data.tags) ? data.tags : [],
+      image: data.image || undefined,
+      rawInput: data.rawInput || undefined,
+      createdAt: data.createdAt || Date.now(),
+      updatedAt: data.updatedAt || Date.now(),
+      providerMetadata,
+      // Legacy top-level accessors for backward compatibility
+      provider,
+      providerId,
+      metadata,
+      metadataVersion,
+      metadataSource,
+      lastSynced,
+      providerUpdatedAt,
+    };
+  }
+
+  /**
+   * One-time migration of legacy Firestore 'items' subcollection to 'resources'
+   */
+  private async migrateLegacyItems(userId: string): Promise<Resource[]> {
+    const migrationKey = `trackr_migrated_resources_${userId}`;
+    try {
+      const legacyItemsRef = collection(db, 'users', userId, 'items');
+      const legacySnapshot = await getDocs(query(legacyItemsRef));
+
+      if (legacySnapshot.empty) {
+        if (typeof window !== 'undefined') localStorage.setItem(migrationKey, 'true');
+        return [];
+      }
+
+      const batch = writeBatch(db);
+      const migratedResources: Resource[] = [];
+
+      legacySnapshot.docs.forEach((legacyDoc) => {
+        const data = legacyDoc.data();
+        const resourceRef = doc(db, 'users', userId, 'resources', legacyDoc.id);
+        
+        const resourceData = {
+          title: data.title || 'Untitled Resource',
+          type: data.type || RESOURCE_TYPES.NOTE,
+          provider: data.provider || PROVIDERS.MANUAL,
+          providerId: data.providerId || null,
+          status: data.status || null,
+          notes: data.notes || null,
+          tags: Array.isArray(data.tags) ? data.tags : [],
+          metadata: data.metadata || {},
+          image: data.image || null,
+          rawInput: data.rawInput || null,
+          createdAt: data.createdAt || Date.now(),
+          updatedAt: data.updatedAt || Date.now(),
+          userId,
+        };
+
+        batch.set(resourceRef, resourceData);
+        migratedResources.push(this.normalizeResource(legacyDoc.id, userId, resourceData));
+      });
+
+      await batch.commit();
+      if (typeof window !== 'undefined') localStorage.setItem(migrationKey, 'true');
+      return migratedResources;
+    } catch (e) {
+      console.warn("Legacy items migration failed or skipped:", e);
+      return [];
+    }
+  }
+
+  /**
+   * Handles local storage for mock user with legacy key migration
+   */
+  private getMockResources(): Resource[] {
+    if (typeof window === 'undefined') return DEFAULT_MOCK_RESOURCES;
+
+    const storedResources = localStorage.getItem('mock-resources');
+    if (storedResources) {
+      try {
+        return JSON.parse(storedResources);
+      } catch {
+        // Fallback if parse fails
+      }
+    }
+
+    // Check legacy mock items
+    const storedItems = localStorage.getItem('mock-items');
+    if (storedItems) {
+      try {
+        const items = JSON.parse(storedItems);
+        const migrated: Resource[] = items.map((item: any) => ({
+          ...item,
+          type: item.type || RESOURCE_TYPES.NOTE,
+          provider: item.provider || PROVIDERS.MANUAL,
+          metadata: item.metadata || {},
+        }));
+        localStorage.setItem('mock-resources', JSON.stringify(migrated));
+        return migrated;
+      } catch {
+        // Fallback
+      }
+    }
+
+    localStorage.setItem('mock-resources', JSON.stringify(DEFAULT_MOCK_RESOURCES));
+    return DEFAULT_MOCK_RESOURCES;
+  }
+}
+
+export const resourceService = new ResourceService();

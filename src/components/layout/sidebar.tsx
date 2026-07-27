@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useUserTags, useFacetedTags } from "@/hooks/use-items";
+import { useUserTags, useFacetedTags } from "@/hooks/use-resources";
 import { useFilterStore } from "@/store/filter-store";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";

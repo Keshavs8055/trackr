@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { User as FirebaseUser, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "firebase/auth";
 import { auth } from "@/services/firebase";
+import { providerService } from "@/services/provider-service";
 
 interface AuthContextType {
   user: FirebaseUser | null;
@@ -31,6 +32,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const unsubscribe = onAuthStateChanged(auth, (user) => {
         setUser(user);
+        if (user) {
+          providerService.initializeCredentials(user.uid);
+        }
         setLoading(false);
       });
       return () => unsubscribe();
@@ -42,12 +46,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithMock = () => {
     // @ts-ignore - Mock user for UI testing
-    setUser({
+    const mockUser = {
       uid: 'mock-user-id',
       displayName: 'Test User',
       email: 'test@trackr.app',
       photoURL: 'https://ui-avatars.com/api/?name=Test+User&background=random',
-    });
+    };
+    setUser(mockUser as any);
+    providerService.initializeCredentials('mock-user-id');
   };
 
   const signInWithGoogle = async () => {
@@ -60,7 +66,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.warn("Using mock user because Firebase API keys are missing.");
         signInWithMock();
       } else {
-        alert("Failed to sign in. Check console for details.");
+        console.warn("Google sign-in failed. Falling back to offline mock mode.");
+        signInWithMock();
       }
     }
   };

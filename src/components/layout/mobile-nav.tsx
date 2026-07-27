@@ -93,6 +93,18 @@ export function MobileNav() {
         </nav>
       </div>
 
+      {/* Floating Action Button (FAB) for 1-Thumb Quick Add on Mobile */}
+      <motion.button
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        whileTap={{ scale: 0.9 }}
+        onClick={() => setQuickAddOpen(true)}
+        className="md:hidden fixed bottom-18 right-4 z-40 size-12 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center border border-primary-foreground/20 active:scale-95 transition-all"
+        aria-label="Quick Add Resource"
+      >
+        <Plus className="size-6 stroke-[2.5px]" />
+      </motion.button>
+
       {/* Profile Drawer */}
       <ProfileDrawer isOpen={profileDrawerOpen} onClose={() => setProfileDrawerOpen(false)} />
     </>

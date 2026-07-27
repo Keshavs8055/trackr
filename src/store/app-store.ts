@@ -12,6 +12,10 @@ interface AppState {
   setHasPendingWrites: (pending: boolean) => void;
   installPrompt: any;
   setInstallPrompt: (prompt: any) => void;
+  integrationsOpen: boolean;
+  setIntegrationsOpen: (open: boolean) => void;
+  filterDrawerOpen: boolean;
+  setFilterDrawerOpen: (open: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -26,4 +30,8 @@ export const useAppStore = create<AppState>((set) => ({
   setHasPendingWrites: (pending) => set({ hasPendingWrites: pending }),
   installPrompt: null,
   setInstallPrompt: (prompt) => set({ installPrompt: prompt }),
+  integrationsOpen: false,
+  setIntegrationsOpen: (open) => set({ integrationsOpen: open }),
+  filterDrawerOpen: false,
+  setFilterDrawerOpen: (open) => set({ filterDrawerOpen: open }),
 }));

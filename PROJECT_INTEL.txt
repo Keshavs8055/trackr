@@ -1,0 +1,119 @@
+# TRACKR V2 FOUNDATION - PROJECT INTEL
+
+## 1. Project Overview
+Trackr (Archive V2) is a minimalist, offline-first personal resource management platform. It generalizes item tracking into a universal **Resource** platform supporting movies, books, TV shows, articles, websites, courses, GitHub repos, tools, podcasts, games, notes, and custom resources with optional metadata enrichment.
+
+## 2. Layered Architecture & Data Flow
+The system follows a strict layered architecture:
+```
+[UI Components & Search Modal]
+       │
+       ▼
+[Custom Hooks (useResources, useProviderSearch, useIntegrations)]
+       │
+       ├─────────────────────────────────┐
+       ▼                                 ▼
+[Resource Service]              [Provider Service & Managers]
+  (Firestore CRUD)                 │ (Search, Metadata & Credentials)
+       │                           ├───────────────┬────────────────┐
+       ▼                           ▼               ▼                ▼
+[Firestore 'resources']     [ProviderCache] [BaseProvider] [CredentialService]
+ (Offline Persistence)     (Shared Cache)  (OMDb, OpenLib) (Encrypted Keys)
+```
+
+- **Offline-First & Source of Truth**: The Trackr database is the absolute source of truth. All manual creations work completely offline. Provider metadata is stored once permanently in the resource's `metadata` dictionary.
+- **Provider Search Architecture**: Single-provider search auto-routed by resource type (e.g. `movie` -> OMDb, `book` -> Open Library) with debounced input, session cache (`src/cache/provider-cache.ts`), and non-blocking manual creation fallback.
+- **Strict Field Ownership**: Metadata refresh strictly preserves user-managed fields (`title`, `tags`, `notes`) while updating provider-managed fields (`metadata`, `image`, `providerUpdatedAt`, `metadataVersion`).
+- **Inline Metadata Search**: Searches are routed automatically and debounced inline during Quick Add when resource tags like `#movies` (OMDb) or `#books` (Open Library) are entered, removing the need for a separate search dialog.
+- **Secure Credentials Hydration**: Saved API credentials are encrypted/decrypted in local storage and automatically loaded on application startup or mock login to ensure online connectivity.
+- **Standardized Provider Errors**: Unified `AppError` class with specific error categories (`INVALID_API_KEY`, `RATE_LIMITED`, `NO_RESULTS`, `NETWORK_ERROR`, `UNCONFIGURED_PROVIDER`, `PROVIDER_UNAVAILABLE`).
+- **Optimistic UI Updates**: React Query mutations perform instantaneous `onMutate` cache updates with `onError` rollback context.
+
+## 3. Core Tech Stack & Dependencies
+- **Framework**: Next.js 16.2.6 (App Router)
+- **UI / Rendering**: React 19, ReactDOM 19, Framer Motion v12, Lucide React
+- **Database / Auth**: Firebase 12.13.0 (Firestore, Auth, Storage)
+- **Data Fetching & State**: `@tanstack/react-query` v5, `zustand` v5
+- **Testing**: Node/tsx unit test runner (`src/lib/__tests__/`, `src/providers/__tests__/`)
+- **Styling**: Tailwind CSS v4, `clsx`, `tailwind-merge`
+
+## 4. Directory Structure
+```
+trackr/
+├── MIGRATION.md          # Migration guide & field ownership rules
+├── PROJECT_INTEL.txt     # Comprehensive system knowledge base
+├── public/               # Static assets & PWA manifest
+└── src/
+    ├── app/              # Next.js App Router (layout, page.tsx, globals.css)
+    ├── cache/            # Shared cache layer (provider-cache.ts)
+    ├── components/       # UI Components
+    │   ├── providers/    # Provider UI (provider-search-modal, search-result-card, provider-status-badge, metadata-section)
+    │   ├── resources/    # Type-specific renderers (movie-details-card, book-details-card, github-details-card, website-details-card), resource-image-poster, resource-stats-bar
+    │   ├── quick-add.tsx
+    │   ├── integrations-drawer.tsx
+    │   ├── item-card.tsx (alias)
+    │   ├── item-details.tsx (alias)
+    │   └── ui/           # Reusable UI primitives & resource-skeleton.tsx
+    ├── hooks/            # Custom React hooks (use-resources, use-provider-search, use-integrations, use-metadata-refresh)
+    ├── lib/              # Core utilities, AppError & Unit Tests
+    ├── providers/        # BaseProvider, OMDbProvider, OpenLibraryProvider, ManualProvider & normalization tests
+    ├── services/         # ResourceService, ProviderService & sub-services (provider-manager, search-service, metadata-service, credential-service, audit-log-service)
+    ├── store/            # Zustand stores (app-store.ts, filter-store.ts)
+    └── types/            # TypeScript schemas & constants (ProviderCapabilities, SearchResult, PaginatedSearchResults, ProviderStatus)
+```
+
+## 5. Resource Data Schema (`src/types/index.ts`)
+- **Resource**:
+  - `id`: string
+  - `userId`: string
+  - `title`: string
+  - `type`: ResourceType (`movie` | `book` | `tv` | `article` | `website` | `course` | `github` | `tool` | `podcast` | `game` | `note` | `custom`)
+  - `provider`: ProviderName (`manual` | `omdb` | `openlibrary` | `tmdb` | `google_books` | custom)
+  - `providerId`?: string
+  - `status`?: string
+  - `notes`?: string
+  - `tags`: string[]
+  - `metadata`: Record<string, unknown> (Strict JSON metadata)
+  - `metadataVersion`?: number
+  - `metadataSource`?: { provider: string; version: string; schemaVersion: number }
+  - `image`?: string
+  - `rawInput`?: string
+  - `createdAt`: number
+  - `updatedAt`: number
+  - `lastSynced`?: number
+  - `providerUpdatedAt`?: number
+
+## 6. Reserved Tag Type Inference
+Quick Add parses inline hashtags. `type` is inferred **strictly** from `RESERVED_TYPE_TAGS`:
+- `#movie`, `#movies` -> `movie`
+- `#book`, `#books` -> `book`
+- `#tv`, `#show`, `#shows` -> `tv`
+- `#game`, `#games` -> `game`
+- `#podcast`, `#podcasts` -> `podcast`
+- `#article`, `#articles` -> `article`
+- `#website`, `#websites` -> `website`
+- `#course`, `#courses` -> `course`
+- `#github`, `#repo` -> `github`
+- `#tool`, `#tools` -> `tool`
+- `#note`, `#notes` -> `note`
+Unrecognized tags default to `type = "note"`.
+
+## 7. Migration & Security Architecture
+- **Lazy Migration**: On first query, if `resources` is empty, `resource-service.ts` converts legacy `items` subcollection to `resources` and sets a local migration flag to avoid repeated queries.
+- **Web Crypto AES-GCM 256-bit Key Encryption**: Provider API keys are encrypted using Web Crypto API (`window.crypto.subtle` AES-GCM 256-bit) with PBKDF2 key derivation (100,000 iterations + SHA-256). Legacy Base64 credentials are auto-migrated on startup.
+- **Custom Confirmation UI**: All native browser `confirm(...)` and `alert(...)` popups are replaced with `ConfirmDialog` and custom inline notification banners.
+- **Code Cleanup**: Removed legacy alias files (`use-items.ts`, `item-card.tsx`, `item-details.tsx`), migrating all imports to `@/hooks/use-resources`.
+- **Firestore Security Rules (`firestore.rules`)**: Uses recursive subcollection matching (`match /{document=**}`) under `/users/{userId}` to allow full access to `/resources`, `/items`, `/collections`, `/audit_logs`, and future subcollections (`/notes`, `/activities`).
+
+## 8. Strategic Roadmap & Execution Plan (`plan.md`)
+- **Phase 2.6 — Domain Layer**: Business logic separation (`src/domain/*`), domain validation/factories, and Domain Events (`domain-events.ts`, `event-bus.ts`).
+- **Phase 2.7 — Metadata Normalization & Adapters**: Typed metadata models (`MovieMetadata`, `BookMetadata`), Provider Adapters, and fast `searchIndex` generation.
+- **[COMPLETED] Phase 3 — Resource Experience**: Type-specific visual metadata rendering (`movie-details-card`, `book-details-card`, `github-details-card`, `website-details-card`), `ResourceImagePoster` shimmer loading, watch runtime & book pages calculation, and Firestore `addDoc` undefined sanitation.
+- **[COMPLETED] Phase 4 — Search & Discovery**: Integrated `AdvancedFilterDrawer` (multi-select chip filters) and `SavedSearchesBar` (saved search presets persisted via Zustand).
+- **[COMPLETED] Phase 5 — Collections Engine**: Dynamic & smart rule collections (`collection-service.ts`), rule evaluator engine (`evaluateSmartCollectionRules`), `CollectionBuilderModal`, `CollectionGrid`, and `CollectionDetailView`.
+- **[COMPLETED] Phase 6 — Typed Status, Dedicated Progress & Provider Capabilities**: Typed lifecycle status model, dedicated progress model (`current`, `total`, `unit`, `percentage`), Provider Capabilities matrix, `StatusBadge`, and `ProgressTracker`.
+- **[COMPLETED] Phase 7 — Activity & Event Log**: Event-sourced timeline (`resources/{id}/activities`) consuming domain events, `ActivityService`, `ActivityTimeline`, and `UserActivityFeed`.
+- **Phase 8 — Advanced Notes Engine**: Sub-notes per resource (`ResourceNote`), markdown toolbar, `[[Wiki-Style]]` internal links.
+- **Phase 9 — Resource Relationships**: Knowledge graph links (`ResourceRelationship`), bi-directional backlink display.
+- **Phase 10 — AI Layer**: Gemini API integration (`ai-service.ts`), semantic query search, similarity recommendations, auto-tagging.
+- **Phase 11 — Scalability & Extension Architecture**: Virtualized feeds (`@tanstack/react-virtual`), IndexedDB caching, and dynamic plugin adapter registry.
