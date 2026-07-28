@@ -149,9 +149,9 @@ export function ResourceNotesTab({ resourceId, resourceTitle }: ResourceNotesTab
                     {/* Wiki Links Badges */}
                     {note.wikiLinks && note.wikiLinks.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 pt-2">
-                        {note.wikiLinks.map(link => (
+                        {note.wikiLinks.map((link, idx) => (
                           <span
-                            key={link}
+                            key={`${note.id}-wiki-${link || 'empty'}-${idx}`}
                             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-semibold"
                           >
                             <Link2 className="size-2.5" />

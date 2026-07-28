@@ -33,10 +33,10 @@ export interface Resource {
   provider: ProviderName | string; // 'manual' | 'omdb' | 'openlibrary' | etc.
   providerId?: string;
   status?: string;
-  progress?: ResourceProgress; // Dedicated progress model ({ current, total, unit, percentage })
   searchIndex?: string; // Pre-calculated searchable text index
   notes?: string;
-  tags: string[];
+  tags: string[]; // Normalized canonical tags (e.g. 'movie', 'book', 'planto', 'link')
+  url?: string; // Direct link URL for website / link resources
   metadata: Record<string, unknown>; // Flexible JSON metadata
   providerMetadata?: ResourceProviderMetadata; // Structured Provider sub-object with typed metadata
   metadataVersion?: number;
@@ -110,3 +110,79 @@ Legacy compatibility layers (`use-items.ts`, `item-card.tsx`, `item-details.tsx`
 1. 100% of active users have logged in and completed the lazy migration pass to the `resources` Firestore collection.
 2. All imports across secondary branches/features have been updated from `@/hooks/use-items` to `@/hooks/use-resources`.
 3. Database backups of legacy `items` subcollections are completed.
+
+---
+
+## 6. Knowledge Graph & Relationships Schema (`ResourceRelationship`)
+
+Phase 9 introduces bi-directional knowledge graph connections stored under `/users/{uid}/relationships`:
+
+```ts
+export type RelationshipType = 
+  | 'adaptation_of' 
+  | 'sequel_to' 
+  | 'prequel_to' 
+  | 'repository_for' 
+  | 'article_for' 
+  | 'author_of' 
+  | 'related_to';
+
+export interface ResourceRelationship {
+  id: string;
+  userId: string;
+  sourceResourceId: string;
+  targetResourceId: string;
+  type: RelationshipType;
+  notes?: string;
+  createdAt: number;
+}
+```
+
+* **Storage Path**: `users/{uid}/relationships` (or `trackr_relationships` in localStorage for mock/offline usage).
+* **Indexed Queries**: Uses `sourceResourceId` and `targetResourceId` indices to perform fast bi-directional graph traversal (`outgoing`, `incoming`, `all`).
+
+---
+
+## 7. Provider Credential Vault Schema Versioning (`StoredCredentialRecord`)
+
+Pre-Phase 9 / Phase 9.5 introduces IndexedDB encrypted credential storage (`trackr_secure_vault` / `credentials` store) with single source of truth versioning:
+
+```ts
+export interface StoredCredentialRecord {
+  id: string; // trackr_cred_${userId}_${provider}
+  userId: string;
+  provider: string;
+  encryptedData: string; // enc:v2:salt:iv:ciphertext (AES-GCM 256-bit)
+  fingerprint: string; // SHA-256 hex fingerprint hash (64 chars)
+  enabled: boolean; // Single source of truth for provider enable/disable state
+  updatedAt: number;
+  version: string; // 'v2'
+  schemaVersion: number; // 2
+}
+```
+
+* **Automated Migration**: Encrypted secrets starting with legacy `enc:v1:` or base64 salts are transparently migrated to `enc:v2:` with `schemaVersion: 2` on first access in `CredentialService.getCredential()`.
+* **Integrity Validation**: SHA-256 fingerprints are verified post-decryption to guard against corrupted key payloads.
+
+---
+
+## 8. Archive Data Portability & Schema Migration (`ArchiveBackupPayload`)
+
+Full personal archive data portability is enabled via JSON backup files (`trackr-archive-backup-YYYY-MM-DD.json`).
+
+```ts
+export interface ArchiveBackupPayload {
+  version: "2.0";
+  exportedAt: number;
+  app: "trackr";
+  resources: Resource[];
+  collections: Collection[];
+  notes: ResourceNote[];
+  relationships: ResourceRelationship[];
+  activities: ResourceActivity[];
+  settings?: Record<string, unknown>;
+}
+```
+
+* **Secret Exclusion**: Archive export explicitly strips all Web Crypto encrypted API keys, master keys, and secret vault storage records.
+* **Auto-Schema Migration**: Archive import (`importArchiveJSON`) normalizes legacy tags (e.g. `#movies` → `#movie`), validates resource schemas, and handles ID collisions cleanly across Firestore and Local Storage.

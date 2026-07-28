@@ -16,11 +16,14 @@ This plan details the transition from initial provider infrastructure into a fea
 - [x] **Phase 3 — Resource Experience**: Type-Specific UI Cards (`movie-details-card`, `book-details-card`, `github-details-card`, `website-details-card`), Poster Image Shimmer Loading (`resource-image-poster`), Watch Runtime & Book Pages Stats Calculation, Legacy Archive Removal, Inline Quick-Add Provider Suggestions, and Firestore `addDoc` Undefined Value Sanitation.
 - [x] **Phase 4 — Search & Discovery**: Global Multi-Field Search, Search Index Cache, Advanced Filters (`advanced-filter-drawer.tsx`) & Saved Views (`saved-searches-bar.tsx`)
 - [x] **Phase 5 — Collections Engine**: Dynamic & Smart Rule Collections (`collection-service.ts`, `evaluateSmartCollectionRules`, `CollectionBuilderModal`, `CollectionGrid`, `CollectionDetailView`)
-- [x] **Phase 6 — Status & Progress Tracking**: Typed Lifecycle Statuses, Dedicated Progress Model (`current`, `total`, `unit`, `%`), & Provider Capabilities Matrix
+- [x] **Phase 6 — Pure Tag-Based Status Tracking**: Typed Lifecycle Statuses, Tag Normalization (`#planto`, `#currentlyreading`, `#completed`), & Provider Capabilities Matrix (Single-resource progress meters removed)
 - [x] **Phase 7 — Activity & Event Log**: Event-Sourced Timelines, History & Analytics
-- [ ] **Phase 8 — Advanced Notes System**: Multi-Notes, Markdown & Internal Wiki-Links (`[[Title]]`) 👈 **[CURRENT ACTIVE PHASE]**
-- [ ] **Phase 9 — Resource Relationships**: Knowledge Graph & Bi-directional Links
-- [ ] **Phase 10 — AI Layer**: Semantic Search, Recommendations, Smart Tags & Summaries
+- [x] **Phase 8 — Advanced Notes System**: Multi-Notes, Markdown & Internal Wiki-Links (`[[Title]]`)
+- [x] **Pre-Phase 9 Audit — Tag Normalization & Link Integration**: Reserved Tag Normalization (`normalizeTag`), Plan-To Tag Simplification (`#planto`), Automatic Link Detection (`extractUrl`), and First-Class Link UI Components.
+- [x] **Phase 9 — Resource Relationships**: Knowledge Graph & Bi-directional Links (`ResourceRelationship`, `RelationshipService`, `use-relationships.ts`, `RelationshipSelectorModal`, `RelationshipGraphCard`)
+- [x] **Phase 9.5 — Provider Platform & Secure Credentials (BYOK Security Hardening)**: Production BYOK Infrastructure, Web Crypto AES-GCM 256-bit Credential Engine (`CredentialService`), IndexedDB Vault Storage (`secureStorage`), Cryptographic Device Master Keys (`enc:v2:`), SHA-256 Fingerprint Integrity Verification, Single Source of Truth for Provider Enable/Disable in Vault Records (`schemaVersion: 2`), Credential Rotation, Inactivity & Session Memory Cache Clearing, Periodic Revalidation, Provider Capability Matrix & Health Metrics (`ProviderHealth`, `ProviderManager`), Connection Diagnostics, and AI Abstraction Stubs (`BaseAIProvider`, `GeminiProvider`).
+- [x] **Codebase Audit & Refactor Pass**: Elimination of dead/unused code (`loading-state`, `empty-state`, `input.tsx`), component deduplication (`ConnectionStatus`), React memoization optimizations (`ResourceImagePoster`, `StatusBadge`), Domain Adapter integration (`MetadataService`), and code quality standardization.
+- [ ] **Phase 10 — AI Layer**: Semantic Search, Recommendations, Smart Tags & Summaries 👈 **[CURRENT ACTIVE PHASE]**
 - [ ] **Phase 11 — Scalability, Virtualization & Extension Architecture**: Virtualized Feeds, IndexedDB Caching, Plugin Adapter Architecture
 
 ---

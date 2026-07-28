@@ -36,13 +36,6 @@ export class ActivityService {
       }
     });
 
-    eventBus.subscribe('ProgressUpdated', (event: DomainEvent) => {
-      const { userId, resourceId, progress, resourceTitle } = event.payload || {};
-      if (userId && resourceId) {
-        this.logActivity(userId, resourceId, 'progress_updated', { progress }, resourceTitle);
-      }
-    });
-
     eventBus.subscribe('MetadataRefreshed', (event: DomainEvent) => {
       const { userId, resourceId, provider, resourceTitle } = event.payload || {};
       if (userId && resourceId) {
@@ -154,7 +147,14 @@ export class ActivityService {
     try {
       const existing: ResourceActivity[] = JSON.parse(existingStr);
       const combined = [...this.inMemoryActivities, ...existing];
-      return combined.filter(a => a.resourceId === resourceId);
+      const seen = new Set<string>();
+      return combined.filter(a => {
+        if (a.resourceId !== resourceId) return false;
+        if (!a.id) return true;
+        if (seen.has(a.id)) return false;
+        seen.add(a.id);
+        return true;
+      });
     } catch {
       return this.inMemoryActivities.filter(a => a.resourceId === resourceId);
     }
@@ -166,7 +166,15 @@ export class ActivityService {
     }
     const existingStr = localStorage.getItem('trackr_activities') || '[]';
     try {
-      return [...this.inMemoryActivities, ...JSON.parse(existingStr)];
+      const existing: ResourceActivity[] = JSON.parse(existingStr);
+      const combined = [...this.inMemoryActivities, ...existing];
+      const seen = new Set<string>();
+      return combined.filter(a => {
+        if (!a.id) return true;
+        if (seen.has(a.id)) return false;
+        seen.add(a.id);
+        return true;
+      });
     } catch {
       return this.inMemoryActivities;
     }

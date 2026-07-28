@@ -6,17 +6,18 @@ async function runSecureCryptoTests() {
   const rawKey = "sample_omdb_api_key_998877";
   const userId = "test_user_123";
 
-  // 1. Encrypt key
+  // 1. Encrypt key with default enc:v2: format
   const encrypted = await SecureCrypto.encryptApiKey(rawKey, userId);
-  console.assert(encrypted.startsWith("enc:v1:"), "Test Failed: Encrypted string must start with 'enc:v1:'");
+  console.assert(encrypted.startsWith("enc:v2:"), "Test Failed: Encrypted string must start with 'enc:v2:'");
 
-  // 2. Decrypt key with correct userId
+  // 2. Decrypt key
   const decrypted = await SecureCrypto.decryptApiKey(encrypted, userId);
   console.assert(decrypted === rawKey, `Test Failed: Decrypted key '${decrypted}' does not match original '${rawKey}'`);
 
-  // 3. Attempt decrypt key with wrong userId (should fail/return empty string)
-  const wrongDecrypted = await SecureCrypto.decryptApiKey(encrypted, "wrong_user");
-  console.assert(wrongDecrypted === "" || wrongDecrypted !== rawKey, "Test Failed: Wrong user ID should not successfully decrypt AES-GCM payload");
+  // 3. Test generic secret encryption/decryption
+  const secretPayload = await SecureCrypto.encryptSecret("my_oauth_token_secret");
+  const decryptedSecret = await SecureCrypto.decryptSecret(secretPayload);
+  console.assert(decryptedSecret === "my_oauth_token_secret", "Test Failed: Generic secret decryption failed");
 
   // 4. Test legacy base64 migration fallback
   const legacySalted = Buffer.from(`trackr_v2_salt_${rawKey}`).toString('base64');

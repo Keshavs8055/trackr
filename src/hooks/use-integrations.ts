@@ -60,3 +60,32 @@ export function useDisconnectProvider() {
     },
   });
 }
+
+export function useTestProviderConnection() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (providerName: string) => {
+      return providerService.testProviderConnection(providerName);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['integrationsStatus'] });
+    },
+  });
+}
+
+export function useRotateCredential() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({ provider, newApiKey }: { provider: ProviderName | string; newApiKey: string }) => {
+      if (!user?.uid) throw new Error("Must be logged in");
+      return providerService.rotateCredential(user.uid, provider, newApiKey);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['integrationsStatus'] });
+      queryClient.invalidateQueries({ queryKey: ['providerSearch'] });
+    },
+  });
+}

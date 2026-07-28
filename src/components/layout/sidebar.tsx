@@ -1,16 +1,19 @@
 "use client";
 
+import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useUserTags, useFacetedTags } from "@/hooks/use-resources";
+import { useFacetedTags } from "@/hooks/use-resources";
 import { useFilterStore } from "@/store/filter-store";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/components/auth-provider";
 import { useAppStore } from "@/store/app-store";
 import { useTagAction } from "@/hooks/use-tag-action";
-import { Archive, Plus, LogOut, Download, WifiOff, RefreshCw } from "lucide-react";
+import { Archive, Plus, LogOut, Download } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
+import { ConnectionStatus } from "./connection-status";
+import { ArchivePortabilityModal } from "@/components/settings/archive-portability-modal";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -18,6 +21,7 @@ export function Sidebar() {
   const setQuickAddOpen = useAppStore(s => s.setQuickAddOpen);
   const installPrompt = useAppStore(s => s.installPrompt);
   const setInstallPrompt = useAppStore(s => s.setInstallPrompt);
+  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
 
   const handleInstallClick = async () => {
     if (!installPrompt) return;
@@ -97,6 +101,14 @@ export function Sidebar() {
           <span>Quick Add</span>
           <span className="text-[10px] opacity-60 ml-1 font-normal">⌘K</span>
         </button>
+
+        <button 
+          onClick={() => setIsArchiveModalOpen(true)}
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary/20 text-foreground h-9 text-xs font-semibold hover:bg-secondary/50 active:scale-98 transition-all"
+        >
+          <Archive className="size-3.5" />
+          <span>Export / Import Data</span>
+        </button>
         
         <div className="flex items-center justify-between px-1.5 pt-1.5 border-t border-border/20">
           <button 
@@ -109,6 +121,7 @@ export function Sidebar() {
           <ThemeToggle />
         </div>
       </div>
+      <ArchivePortabilityModal isOpen={isArchiveModalOpen} onClose={() => setIsArchiveModalOpen(false)} />
     </aside>
   );
 }
@@ -144,29 +157,4 @@ function TagList() {
       })}
     </div>
   );
-}
-
-function ConnectionStatus() {
-  const isOnline = useAppStore(s => s.isOnline);
-  const hasPendingWrites = useAppStore(s => s.hasPendingWrites);
-
-  if (!isOnline) {
-    return (
-      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-destructive/10 text-destructive border border-destructive/20 text-[9px] font-bold animate-pulse flex-shrink-0">
-        <WifiOff className="size-2.5" />
-        <span>Offline</span>
-      </div>
-    );
-  }
-
-  if (hasPendingWrites) {
-    return (
-      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[9px] font-bold flex-shrink-0">
-        <RefreshCw className="size-2.5 animate-spin" />
-        <span>Syncing...</span>
-      </div>
-    );
-  }
-
-  return null;
 }

@@ -28,19 +28,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // If auth is not initialized correctly (e.g. mock keys), it might throw.
+    let isMounted = true;
+
+    // Safety timeout: Ensure loading never hangs indefinitely
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) {
+        setLoading(false);
+      }
+    }, 2500);
+
+    // Check for demo mode session
+    const isDemoSession = typeof window !== "undefined" && localStorage.getItem("trackr_auth_demo") === "true";
+    if (isDemoSession) {
+      const mockUser = {
+        uid: 'mock-user-id',
+        displayName: 'Test User',
+        email: 'test@trackr.app',
+        photoURL: 'https://ui-avatars.com/api/?name=Test+User&background=random',
+      };
+      setUser(mockUser as any);
+      try {
+        providerService.initializeCredentials('mock-user-id');
+      } catch (err) {
+        console.warn("Credential initialization failed in demo mode:", err);
+      }
+      setLoading(false);
+      clearTimeout(safetyTimer);
+      return;
+    }
+
     try {
-      const unsubscribe = onAuthStateChanged(auth, (user) => {
-        setUser(user);
-        if (user) {
-          providerService.initializeCredentials(user.uid);
+      const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        if (!isMounted) return;
+        setUser(firebaseUser);
+        if (firebaseUser) {
+          try {
+            await providerService.initializeCredentials(firebaseUser.uid);
+          } catch (err) {
+            console.warn("Error initializing credentials on auth state change:", err);
+          }
         }
         setLoading(false);
+        clearTimeout(safetyTimer);
       });
-      return () => unsubscribe();
+
+      return () => {
+        isMounted = false;
+        clearTimeout(safetyTimer);
+        unsubscribe();
+      };
     } catch (e) {
-      console.warn("Firebase Auth not initialized correctly. Using mock state.");
-      setLoading(false);
+      console.warn("Firebase Auth not initialized correctly. Falling back to default state.");
+      if (isMounted) {
+        setLoading(false);
+        clearTimeout(safetyTimer);
+      }
     }
   }, []);
 
@@ -52,32 +94,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email: 'test@trackr.app',
       photoURL: 'https://ui-avatars.com/api/?name=Test+User&background=random',
     };
+    if (typeof window !== "undefined") {
+      localStorage.setItem("trackr_auth_demo", "true");
+    }
     setUser(mockUser as any);
-    providerService.initializeCredentials('mock-user-id');
+    try {
+      providerService.initializeCredentials('mock-user-id');
+    } catch (err) {
+      console.warn("Error initializing demo credentials:", err);
+    }
+    setLoading(false);
   };
 
   const signInWithGoogle = async () => {
+    setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("trackr_auth_demo");
+      }
     } catch (error: any) {
       console.error("Error signing in with Google:", error);
-      if (error.code === 'auth/invalid-api-key' || error.message.includes('api key')) {
+      if (error.code === 'auth/invalid-api-key' || error.message?.includes('api key')) {
         console.warn("Using mock user because Firebase API keys are missing.");
         signInWithMock();
       } else {
         console.warn("Google sign-in failed. Falling back to offline mock mode.");
         signInWithMock();
       }
+    } finally {
+      setLoading(false);
     }
   };
 
   const logout = async () => {
     try {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("trackr_auth_demo");
+      }
       setUser(null);
       await signOut(auth);
     } catch (error) {
       console.error("Error signing out:", error);
+    } finally {
+      setLoading(false);
     }
   };
 

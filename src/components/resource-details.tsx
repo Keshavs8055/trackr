@@ -17,9 +17,9 @@ import { formatDistanceToNow } from "date-fns";
 import { extractTags, cleanTitle } from "@/lib/parser";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { StatusBadge } from "./resources/status-badge";
-import { ProgressTracker } from "./resources/progress-tracker";
 import { ActivityTimeline } from "./activity/activity-timeline";
 import { ResourceNotesTab } from "./notes/resource-notes-tab";
+import { RelationshipGraphCard } from "./relationships/relationship-graph-card";
 
 interface ResourceDetailsProps {
   resource: Resource | null;
@@ -133,23 +133,25 @@ export function ResourceDetails({ resource, isOpen, onClose }: ResourceDetailsPr
   const isExternalProvider = activeResource.provider && activeResource.provider !== "manual";
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-xs md:items-center p-0 md:p-4">
+    <div key={activeResource.id}>
+    {isOpen && (
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-overlay md:items-center p-0 md:p-4">
+        <AnimatePresence>
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0" 
+            className="absolute inset-0 gpu-accelerated" 
             onClick={onClose} 
           />
-
+        </AnimatePresence>
+        <AnimatePresence>
           <motion.div
             initial={{ y: "100%", opacity: 0.8 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: "100%", opacity: 0.8 }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className="relative z-10 w-full max-w-lg bg-card rounded-t-2xl md:rounded-2xl border border-border shadow-lg flex flex-col max-h-[80vh] overflow-hidden"
+            className="relative z-10 w-full max-w-lg bg-card rounded-t-2xl md:rounded-2xl border border-border shadow-lg flex flex-col max-h-[80vh] overflow-hidden gpu-accelerated"
           >
             <div className="px-5 py-4 flex items-center justify-between border-b border-border/30">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
@@ -250,9 +252,9 @@ export function ResourceDetails({ resource, isOpen, onClose }: ResourceDetailsPr
                     
                     {activeResource.tags && activeResource.tags.length > 0 && (
                       <div className="flex flex-wrap gap-2 pt-0.5">
-                        {activeResource.tags.map(tag => (
+                        {activeResource.tags.map((tag, idx) => (
                           <span 
-                            key={tag} 
+                            key={`${activeResource.id}-tag-${tag}-${idx}`} 
                             className="text-xs font-semibold text-muted-foreground/80"
                           >
                             #{tag}
@@ -261,9 +263,6 @@ export function ResourceDetails({ resource, isOpen, onClose }: ResourceDetailsPr
                       </div>
                     )}
                   </div>
-
-                  {/* Dedicated Progress Tracker */}
-                  <ProgressTracker resource={activeResource} />
 
                   {/* Resource Poster / Artwork */}
                   {activeResource.image && (
@@ -297,6 +296,9 @@ export function ResourceDetails({ resource, isOpen, onClose }: ResourceDetailsPr
                       </p>
                     </div>
                   )}
+
+                  {/* Knowledge Graph Connections */}
+                  <RelationshipGraphCard resource={activeResource} onOpenResourceDetails={(r) => setActiveResource(r)} />
 
                   {/* Multi-Notes & Wiki-Link Engine */}
                   <ResourceNotesTab resourceId={activeResource.id} resourceTitle={activeResource.title} />
@@ -360,6 +362,7 @@ export function ResourceDetails({ resource, isOpen, onClose }: ResourceDetailsPr
               )}
             </div>
           </motion.div>
+          </AnimatePresence>
         </div>
       )}
 
@@ -374,6 +377,6 @@ export function ResourceDetails({ resource, isOpen, onClose }: ResourceDetailsPr
         onConfirm={handleConfirmDelete}
         onClose={() => setIsConfirmingDelete(false)}
       />
-    </AnimatePresence>
+</div>
   );
 }

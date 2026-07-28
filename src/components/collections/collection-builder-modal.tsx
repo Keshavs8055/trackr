@@ -108,12 +108,12 @@ export function CollectionBuilderModal({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-overlay">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
-          className="w-full max-w-lg bg-card border border-border/50 rounded-xl shadow-2xl overflow-hidden"
+          className="w-full max-w-lg bg-card border border-border/50 rounded-xl shadow-2xl overflow-hidden gpu-accelerated"
         >
           <div className="flex items-center justify-between p-4 border-b border-border/30">
             <div className="flex items-center gap-2 font-bold text-base">

@@ -15,13 +15,27 @@ export function Logo({ size = 32, className, ...props }: LogoProps) {
       className={className}
       {...props}
     >
-      <path
-        d="M 66 48 H 80 A 8 8 0 0 0 80 32 H 20 A 8 8 0 0 0 20 48 H 50 A 8 8 0 0 1 58 56 V 78 A 8 8 0 0 1 42 78 V 56"
+      {/* Outer subtle rounded square frame */}
+      <rect
+        x="12"
+        y="12"
+        width="76"
+        height="76"
+        rx="22"
         stroke="currentColor"
-        strokeWidth="8"
+        strokeWidth="6.5"
+        strokeOpacity="0.9"
+      />
+      {/* Minimal clean 'T' mark */}
+      <path
+        d="M 32 38 H 68 M 50 38 V 68"
+        stroke="currentColor"
+        strokeWidth="7.5"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+      {/* Accent dot */}
+      <circle cx="50" cy="25" r="3.5" fill="currentColor" />
     </svg>
   );
 }

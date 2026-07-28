@@ -41,12 +41,32 @@ export class ProviderService {
     return credentialService.configureProvider(userId, providerName, apiKey);
   }
 
+  public async rotateCredential(userId: string, providerName: ProviderName | string, newApiKey: string) {
+    return credentialService.rotateCredential(userId, providerName, newApiKey);
+  }
+
+  public async revalidateCredential(userId: string, providerName: string) {
+    return credentialService.revalidateCredential(userId, providerName);
+  }
+
+  public clearCredentialCache() {
+    credentialService.clearMemoryCache();
+  }
+
   public async setProviderEnabled(userId: string, providerName: ProviderName | string, enabled: boolean) {
     return credentialService.setProviderEnabled(userId, providerName, enabled);
   }
 
   public async disconnectProvider(userId: string, providerName: ProviderName | string) {
     return credentialService.disconnectProvider(userId, providerName);
+  }
+
+  public async testProviderConnection(providerName: string): Promise<{ success: boolean; message: string }> {
+    return providerManager.testConnection(providerName);
+  }
+
+  public getProviderHealth(providerName: string) {
+    return providerManager.getHealth(providerName);
   }
 
   public getAuditLogs() {

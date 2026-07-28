@@ -25,7 +25,17 @@ export class AuditLogService {
 
     if (userId && userId !== 'mock-user-id') {
       try {
-        await addDoc(collection(db, 'users', userId, 'audit_logs'), entry);
+        const docData: Record<string, unknown> = {
+          id: entry.id,
+          userId: entry.userId,
+          action: entry.action,
+          provider: entry.provider,
+          timestamp: entry.timestamp,
+        };
+        if (entry.details) {
+          docData.details = JSON.parse(JSON.stringify(entry.details));
+        }
+        await addDoc(collection(db, 'users', userId, 'audit_logs'), docData);
       } catch (err) {
         console.warn("Failed to write audit log to Firestore:", err);
       }

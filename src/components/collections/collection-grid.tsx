@@ -36,7 +36,7 @@ export function CollectionGrid({
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6 bg-green-500">
       {collections.map(col => {
         const itemCount = col.isDynamic 
           ? CollectionService.evaluateSmartCollectionRules(col, resources).length

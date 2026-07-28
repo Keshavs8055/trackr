@@ -2,6 +2,19 @@ import { providerManager } from './provider-manager';
 import { providerCache } from '@/cache/provider-cache';
 import { Resource, ResourceProviderMetadata } from '@/types';
 import { AppError } from '@/lib/app-error';
+import { OMDbAdapter, OpenLibraryAdapter, GithubAdapter } from '@/domain/adapters/provider-adapters';
+
+const omdbAdapter = new OMDbAdapter();
+const openLibraryAdapter = new OpenLibraryAdapter();
+const githubAdapter = new GithubAdapter();
+
+function adaptRawMetadata(providerName: string, raw: Record<string, unknown>): Record<string, unknown> {
+  if (!raw) return {};
+  if (providerName === 'omdb') return omdbAdapter.adapt(raw) as unknown as Record<string, unknown>;
+  if (providerName === 'openlibrary') return openLibraryAdapter.adapt(raw) as unknown as Record<string, unknown>;
+  if (providerName === 'github') return githubAdapter.adapt(raw) as unknown as Record<string, unknown>;
+  return raw;
+}
 
 export class MetadataService {
   /**
@@ -61,12 +74,15 @@ export class MetadataService {
     }
 
     const details = await provider.getDetailsNormalized(providerId);
-    providerCache.setMetadata(providerName, providerId, details.metadata);
+    const adapted = adaptRawMetadata(providerName, details.metadata);
+    const enrichedMetadata = { ...details.metadata, ...adapted };
+
+    providerCache.setMetadata(providerName, providerId, enrichedMetadata);
 
     const providerMetadata: ResourceProviderMetadata = {
       provider: providerName,
       providerId,
-      metadata: details.metadata,
+      metadata: enrichedMetadata,
       version: 1,
       source,
     };
@@ -75,7 +91,7 @@ export class MetadataService {
       title: details.title,
       image: details.image,
       providerMetadata,
-      metadata: details.metadata,
+      metadata: enrichedMetadata,
       metadataVersion: 1,
       metadataSource: source,
     };
@@ -100,15 +116,17 @@ export class MetadataService {
 
     const details = await provider.getDetailsNormalized(providerId);
     const now = Date.now();
-
-    // Cache updated metadata
-    providerCache.setMetadata(providerName, providerId, details.metadata);
+    const adapted = adaptRawMetadata(providerName, details.metadata);
 
     const existingMetadata = resource.providerMetadata?.metadata || resource.metadata || {};
     const updatedMetadata = {
       ...existingMetadata,
       ...details.metadata,
+      ...adapted,
     };
+
+    // Cache updated metadata
+    providerCache.setMetadata(providerName, providerId, updatedMetadata);
 
     const providerMetadata: ResourceProviderMetadata = {
       provider: providerName,

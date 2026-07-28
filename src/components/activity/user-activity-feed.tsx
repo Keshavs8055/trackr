@@ -4,7 +4,7 @@ import React from 'react';
 import { useUserActivities } from '@/hooks/use-activities';
 import { formatDistanceToNow } from 'date-fns';
 import { ActivityAction, ResourceActivity } from '@/types';
-import { Activity, X, Sparkles, ArrowRightLeft, TrendingUp, RefreshCw, FileText, Trash2 } from 'lucide-react';
+import { Activity, X, Sparkles, ArrowRightLeft, RefreshCw, FileText, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface UserActivityFeedProps {
@@ -15,7 +15,6 @@ interface UserActivityFeedProps {
 const ACTION_ICONS: Record<ActivityAction, React.ElementType> = {
   created: Sparkles,
   status_changed: ArrowRightLeft,
-  progress_updated: TrendingUp,
   metadata_refreshed: RefreshCw,
   note_added: FileText,
   relationship_added: Sparkles,
@@ -29,8 +28,6 @@ function formatActionTitle(act: ResourceActivity): string {
       return `Created ${title}`;
     case 'status_changed':
       return `Updated status for ${title}`;
-    case 'progress_updated':
-      return `Updated progress for ${title}`;
     case 'metadata_refreshed':
       return `Refreshed metadata for ${title}`;
     default:

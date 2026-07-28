@@ -110,12 +110,12 @@ export function AdvancedFilterDrawer() {
   return (
     <AnimatePresence>
       {filterDrawerOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-xs md:items-center p-0 md:p-4">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-overlay md:items-center p-0 md:p-4">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0"
+            className="absolute inset-0 gpu-accelerated"
             onClick={() => setFilterDrawerOpen(false)}
           />
 
@@ -124,7 +124,7 @@ export function AdvancedFilterDrawer() {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: "100%", opacity: 0.8 }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className="relative z-10 w-full max-w-lg bg-card rounded-t-2xl md:rounded-2xl border border-border shadow-lg flex flex-col max-h-[85vh] overflow-hidden"
+            className="relative z-10 w-full max-w-lg bg-card rounded-t-2xl md:rounded-2xl border border-border shadow-lg flex flex-col max-h-[85vh] overflow-hidden gpu-accelerated"
           >
             {/* Header */}
             <div className="px-5 py-4 flex items-center justify-between border-b border-border/30">

@@ -41,7 +41,7 @@ const TYPE_GRADIENTS: Record<string, string> = {
   custom: 'from-teal-900/40 to-slate-900/80 text-teal-400',
 };
 
-export function ResourceImagePoster({
+export const ResourceImagePoster = React.memo(function ResourceImagePoster({
   src,
   alt,
   type,
@@ -100,4 +100,4 @@ export function ResourceImagePoster({
       />
     </div>
   );
-}
+});

@@ -1,48 +1,101 @@
 import { providerManager } from './provider-manager';
 import { auditLogService } from './audit-log-service';
-import { OMDbProvider } from '@/providers/omdb-provider';
-import { ProviderCredentialStatus, ProviderName, ProviderStatus } from '@/types';
+import { ProviderCredentialStatus, ProviderName } from '@/types';
 import { AppError } from '@/lib/app-error';
 import { SecureCrypto } from '@/lib/secure-crypto';
+import { secureStorage, StoredCredentialRecord } from '@/lib/secure-storage';
 
 export class CredentialService {
+  // Session-level in-memory cache for decrypted secrets
+  private memoryCache: Map<string, { secret: string; decryptedAt: number }> = new Map();
+  private inactivityTimeoutMs: number = 15 * 60 * 1000; // 15 minutes
+  private isCleanupListenerRegistered: boolean = false;
+
+  constructor() {
+    this.registerSessionCleanupListeners();
+    this.startPeriodicCachePurge();
+  }
+
+  private registerSessionCleanupListeners(): void {
+    if (typeof window === 'undefined' || this.isCleanupListenerRegistered) return;
+    this.isCleanupListenerRegistered = true;
+
+    window.addEventListener('beforeunload', () => this.clearMemoryCache());
+    window.addEventListener('pagehide', () => this.clearMemoryCache());
+  }
+
+  private startPeriodicCachePurge(): void {
+    if (typeof window === 'undefined') return;
+    setInterval(() => {
+      const now = Date.now();
+      for (const [key, entry] of this.memoryCache.entries()) {
+        if (now - entry.decryptedAt >= this.inactivityTimeoutMs) {
+          this.memoryCache.delete(key);
+        }
+      }
+    }, 60 * 1000);
+  }
+
   /**
-   * Validates API key credentials and saves them securely using AES-GCM 256-bit encryption.
+   * Clears all decrypted credentials from session memory.
+   */
+  public clearMemoryCache(): void {
+    this.memoryCache.clear();
+  }
+
+  /**
+   * Validates API key credentials and saves them securely to IndexedDB using AES-GCM 256-bit encryption.
    */
   public async configureProvider(
     userId: string,
     providerName: ProviderName | string,
-    apiKey: string
+    apiKey: string,
+    passphrase?: string
   ): Promise<ProviderCredentialStatus> {
     if (!apiKey || apiKey.trim() === '') {
       throw AppError.validationFailed('API key cannot be empty.');
     }
 
     const provider = providerManager.getProvider(providerName);
-    const isValid = await provider.validateCredentials({ apiKey });
+    const trimmedKey = apiKey.trim();
 
+    // Validate credentials directly
+    const isValid = await provider.validateCredentials({ apiKey: trimmedKey });
     if (!isValid) {
       providerManager.setProviderCredentialStatus({
         provider: providerName as ProviderName,
         configured: false,
         enabled: false,
         status: 'INVALID_CREDENTIALS',
+        lastError: 'Credential validation failed.',
       });
       throw AppError.invalidApiKey(provider.displayName);
     }
 
-    // Keep in-memory key in provider instance
-    if (provider instanceof OMDbProvider) {
-      provider.setApiKey(apiKey.trim());
-    }
+    // Compute SHA-256 fingerprint hash
+    const fingerprint = await SecureCrypto.computeFingerprint(trimmedKey);
 
-    // Encrypt key with AES-GCM 256-bit + PBKDF2 salt/IV
-    const encrypted = await SecureCrypto.encryptApiKey(apiKey.trim(), userId);
+    // Encrypt secret using Device Master Key (or optional passphrase) via Web Crypto AES-GCM 256-bit
+    const encryptedData = await SecureCrypto.encryptSecret(trimmedKey, passphrase);
 
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(`trackr_cred_${userId}_${providerName}`, encrypted);
-      localStorage.setItem(`trackr_enabled_${userId}_${providerName}`, 'true');
-    }
+    const recordId = `trackr_cred_${userId}_${providerName}`;
+    const record: StoredCredentialRecord = {
+      id: recordId,
+      userId,
+      provider: providerName,
+      encryptedData,
+      fingerprint,
+      enabled: true,
+      updatedAt: Date.now(),
+      version: 'v2',
+      schemaVersion: 2,
+    };
+
+    // Store in IndexedDB vault (single source of truth for credential & enabled state)
+    await secureStorage.setCredential(record);
+
+    // Cache in session memory
+    this.memoryCache.set(recordId, { secret: trimmedKey, decryptedAt: Date.now() });
 
     const status: ProviderCredentialStatus = {
       provider: providerName as ProviderName,
@@ -50,16 +103,40 @@ export class CredentialService {
       enabled: true,
       status: 'CONNECTED',
       lastValidated: Date.now(),
+      fingerprint,
+      connectionHealth: 'HEALTHY',
     };
 
     providerManager.setProviderCredentialStatus(status);
-    await auditLogService.logAction(userId, 'connect', providerName, { status: 'CONNECTED' });
+    await auditLogService.logAction(userId, 'connect', providerName, { status: 'CONNECTED', fingerprint });
 
     return status;
   }
 
   /**
+   * Rotates credentials for a provider without disconnecting.
+   */
+  public async rotateCredential(
+    userId: string,
+    providerName: ProviderName | string,
+    newApiKey: string,
+    passphrase?: string
+  ): Promise<ProviderCredentialStatus> {
+    const existingStatus = providerManager.getProviderStatus(providerName);
+    const newFingerprint = await SecureCrypto.computeFingerprint(newApiKey.trim());
+
+    if (existingStatus.fingerprint && existingStatus.fingerprint === newFingerprint) {
+      throw AppError.validationFailed('New API key is identical to the current key.');
+    }
+
+    const updatedStatus = await this.configureProvider(userId, providerName, newApiKey, passphrase);
+    await auditLogService.logAction(userId, 'credential_update', providerName, { action: 'rotated', fingerprint: newFingerprint });
+    return updatedStatus;
+  }
+
+  /**
    * Toggles provider enable/disable state WITHOUT deleting stored credentials.
+   * Updates state in IndexedDB vault record as the single source of truth.
    */
   public async setProviderEnabled(
     userId: string,
@@ -71,8 +148,12 @@ export class CredentialService {
       throw AppError.validationFailed('Cannot enable unconfigured provider. Please configure credentials first.');
     }
 
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(`trackr_enabled_${userId}_${providerName}`, enabled ? 'true' : 'false');
+    const recordId = `trackr_cred_${userId}_${providerName}`;
+    const record = await secureStorage.getCredential(recordId);
+    if (record) {
+      record.enabled = enabled;
+      record.updatedAt = Date.now();
+      await secureStorage.setCredential(record);
     }
 
     const newStatus: ProviderCredentialStatus = {
@@ -88,21 +169,16 @@ export class CredentialService {
   }
 
   /**
-   * Disconnects a provider by deleting stored credentials.
+   * Disconnects a provider by deleting stored credentials from IndexedDB and memory.
    */
   public async disconnectProvider(
     userId: string,
     providerName: ProviderName | string
   ): Promise<ProviderCredentialStatus> {
-    const provider = providerManager.getProvider(providerName);
-    if (provider instanceof OMDbProvider) {
-      provider.setApiKey(null);
-    }
+    const recordId = `trackr_cred_${userId}_${providerName}`;
+    this.memoryCache.delete(recordId);
 
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem(`trackr_cred_${userId}_${providerName}`);
-      localStorage.removeItem(`trackr_enabled_${userId}_${providerName}`);
-    }
+    await secureStorage.deleteCredential(recordId);
 
     const status: ProviderCredentialStatus = {
       provider: providerName as ProviderName,
@@ -118,38 +194,135 @@ export class CredentialService {
   }
 
   /**
-   * Initializes credentials for the active user on startup with auto-migration of legacy keys
+   * Sole accessor for decrypted API keys / secrets.
+   * Providers request credentials on-demand through CredentialService.
+   * Verifies SHA-256 fingerprint upon decryption to prevent corrupted credentials.
+   */
+  public async getCredential(
+    userId: string, 
+    providerName: string, 
+    passphrase?: string
+  ): Promise<string | null> {
+    const recordId = `trackr_cred_${userId}_${providerName}`;
+    const cached = this.memoryCache.get(recordId);
+
+    // Return cached secret if within 15-minute inactivity window
+    if (cached && Date.now() - cached.decryptedAt < this.inactivityTimeoutMs) {
+      cached.decryptedAt = Date.now(); // Touch timestamp on access
+      return cached.secret;
+    }
+
+    // Fetch encrypted record from IndexedDB vault
+    const record = await secureStorage.getCredential(recordId);
+    if (!record || !record.encryptedData) return null;
+
+    // Decrypt using Web Crypto AES-GCM (v2 device key or v1 legacy userId fallback)
+    const decrypted = await SecureCrypto.decryptSecret(record.encryptedData, passphrase, userId);
+    if (decrypted) {
+      // Recompute SHA-256 fingerprint & verify integrity
+      const recomputedFingerprint = await SecureCrypto.computeFingerprint(decrypted);
+      if (record.fingerprint && recomputedFingerprint !== record.fingerprint) {
+        console.error(`[CredentialService] Corrupted credential for ${providerName}! SHA-256 fingerprint mismatch.`);
+        this.memoryCache.delete(recordId);
+        providerManager.setProviderCredentialStatus({
+          provider: providerName as ProviderName,
+          configured: false,
+          enabled: false,
+          status: 'INVALID_CREDENTIALS',
+          lastError: 'Credential fingerprint verification failed (corrupted key payload).',
+        });
+        return null;
+      }
+
+      // Auto-migrate legacy v1 format to v2 in IndexedDB
+      if (record.encryptedData.startsWith(SecureCrypto.PREFIX_V1)) {
+        const upgradedEncrypted = await SecureCrypto.encryptSecret(decrypted, passphrase);
+        const upgradedRecord: StoredCredentialRecord = {
+          ...record,
+          encryptedData: upgradedEncrypted,
+          fingerprint: record.fingerprint || recomputedFingerprint,
+          enabled: record.enabled !== false,
+          updatedAt: Date.now(),
+          version: 'v2',
+          schemaVersion: 2,
+        };
+        await secureStorage.setCredential(upgradedRecord);
+      }
+
+      this.memoryCache.set(recordId, { secret: decrypted, decryptedAt: Date.now() });
+      return decrypted;
+    }
+
+    return null;
+  }
+
+  /**
+   * Revalidates an existing credential live against the provider API to detect revoked keys.
+   */
+  public async revalidateCredential(
+    userId: string, 
+    providerName: string, 
+    passphrase?: string
+  ): Promise<boolean> {
+    const key = await this.getCredential(userId, providerName, passphrase);
+    if (!key) return false;
+
+    const provider = providerManager.getProvider(providerName);
+    const isValid = await provider.validateCredentials({ apiKey: key });
+
+    const currentStatus = providerManager.getProviderStatus(providerName as ProviderName);
+    if (isValid) {
+      providerManager.recordSuccess(providerName);
+      providerManager.setProviderCredentialStatus({
+        ...currentStatus,
+        configured: true,
+        enabled: true,
+        status: 'CONNECTED',
+        lastValidated: Date.now(),
+        connectionHealth: 'HEALTHY',
+      });
+      return true;
+    } else {
+      providerManager.recordError(providerName, 'Credential revalidation failed: Key revoked or expired.');
+      providerManager.setProviderCredentialStatus({
+        ...currentStatus,
+        status: 'INVALID_CREDENTIALS',
+        lastError: 'Key revoked or expired during revalidation.',
+        connectionHealth: 'FAILED',
+      });
+      await auditLogService.logAction(userId, 'revalidate_failed', providerName);
+      return false;
+    }
+  }
+
+  /**
+   * Checks whether a provider has configured credentials in IndexedDB or status manager.
+   */
+  public hasCredential(userId: string, providerName: string): boolean {
+    const status = providerManager.getProviderStatus(providerName);
+    return status.configured;
+  }
+
+  /**
+   * Initializes provider credential statuses on startup from IndexedDB without loading plaintext into memory until needed.
    */
   public async initializeCredentials(userId: string): Promise<void> {
-    if (typeof window === 'undefined') return;
-
     for (const provider of providerManager.getAllProviders()) {
       if (provider.capabilities.supportsCredentials) {
-        const encrypted = localStorage.getItem(`trackr_cred_${userId}_${provider.name}`);
-        const enabledStr = localStorage.getItem(`trackr_enabled_${userId}_${provider.name}`);
+        const recordId = `trackr_cred_${userId}_${provider.name}`;
+        const record = await secureStorage.getCredential(recordId);
 
-        if (encrypted) {
-          const decrypted = await SecureCrypto.decryptApiKey(encrypted, userId);
-          if (decrypted) {
-            if (provider instanceof OMDbProvider) {
-              provider.setApiKey(decrypted);
-            }
-            
-            // Auto-migrate legacy key format to AES-GCM if needed
-            if (!encrypted.startsWith('enc:v1:')) {
-              const upgradedEncrypted = await SecureCrypto.encryptApiKey(decrypted, userId);
-              localStorage.setItem(`trackr_cred_${userId}_${provider.name}`, upgradedEncrypted);
-            }
-
-            const isEnabled = enabledStr !== 'false';
-            providerManager.setProviderCredentialStatus({
-              provider: provider.name,
-              configured: true,
-              enabled: isEnabled,
-              status: isEnabled ? 'CONNECTED' : 'DISABLED',
-              lastValidated: Date.now(),
-            });
-          }
+        if (record && record.encryptedData) {
+          const isEnabled = record.enabled !== false;
+          providerManager.setProviderCredentialStatus({
+            provider: provider.name as ProviderName,
+            configured: true,
+            enabled: isEnabled,
+            status: isEnabled ? 'CONNECTED' : 'DISABLED',
+            lastValidated: record.updatedAt,
+            fingerprint: record.fingerprint,
+            connectionHealth: 'HEALTHY',
+          });
         }
       }
     }

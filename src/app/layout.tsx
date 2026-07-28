@@ -19,11 +19,17 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: "/icon.svg", type: "image/svg+xml" },
-      { url: "/favicon.ico", sizes: "any" }
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon.ico", sizes: "any" },
     ],
-    apple: "/apple-icon.png",
+    apple: [
+      { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
+    ],
   },
 };
+
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 export default function RootLayout({
   children,
@@ -31,8 +37,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${inter.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col font-sans bg-background text-foreground">
+    <html lang="en" suppressHydrationWarning className={`${inter.variable} antialiased`}>
+      <body className="flex flex-col font-sans bg-background text-foreground">
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
@@ -42,7 +48,11 @@ export default function RootLayout({
           <QueryProvider>
             <AuthProvider>
               <PwaProvider>
-                <AuthWrapper>{children}</AuthWrapper>
+                <AuthWrapper>
+                  <ErrorBoundary fallbackTitle="Trackr Application Error">
+                    {children}
+                  </ErrorBoundary>
+                </AuthWrapper>
               </PwaProvider>
             </AuthProvider>
           </QueryProvider>

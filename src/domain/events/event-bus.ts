@@ -1,7 +1,6 @@
 export type DomainEventType = 
   | 'ResourceCreated'
   | 'StatusChanged'
-  | 'ProgressUpdated'
   | 'MetadataRefreshed'
   | 'CollectionAssigned';
 

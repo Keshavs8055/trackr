@@ -23,4 +23,8 @@ export class ManualProvider extends BaseProvider {
   public isConfigured(): boolean {
     return true; // Manual provider is always active and ready
   }
+
+  public override async validateCredentials(): Promise<boolean> {
+    return true;
+  }
 }

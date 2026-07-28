@@ -11,6 +11,7 @@ export type ErrorCategory =
   | 'VALIDATION_FAILED'
   | 'SERVER_ERROR'
   | 'TIMEOUT'
+  | 'AI_NOT_IMPLEMENTED'
   | 'UNKNOWN_ERROR';
 
 export class AppError extends Error {

@@ -1,5 +1,7 @@
+import { secureStorage } from './secure-storage';
+
 /**
- * Web Crypto API (AES-GCM 256-bit + PBKDF2) encryption utility for client-side API keys.
+ * Web Crypto API (AES-GCM 256-bit + PBKDF2) encryption utility for client-side API keys and credentials.
  */
 
 function getCrypto(): Crypto {
@@ -9,7 +11,6 @@ function getCrypto(): Crypto {
   if (typeof globalThis !== 'undefined' && globalThis.crypto) {
     return globalThis.crypto;
   }
-  // Node.js fallback for unit test environments
   try {
     const nodeCrypto = require('crypto');
     return nodeCrypto.webcrypto || nodeCrypto;
@@ -35,7 +36,44 @@ function hexToBuffer(hex: string): Uint8Array {
 export class SecureCrypto {
   private static ITERATIONS = 100000;
   private static KEY_LEN = 256;
-  private static PREFIX = 'enc:v1:';
+  public static PREFIX_V2 = 'enc:v2:';
+  public static PREFIX_V1 = 'enc:v1:';
+
+  private static inMemoryDeviceKey: string | null = null;
+
+  /**
+   * Generates or retrieves a cryptographically random device master key (not derived from userId).
+   */
+  public static async getOrCreateDeviceMasterKey(): Promise<string> {
+    if (this.inMemoryDeviceKey) return this.inMemoryDeviceKey;
+
+    let deviceKey = await secureStorage.getSystemKey('device_master_key');
+    if (!deviceKey && typeof window !== 'undefined') {
+      deviceKey = localStorage.getItem('trackr_sys_device_master_key');
+    }
+
+    if (!deviceKey) {
+      const crypto = getCrypto();
+      const randomBytes = crypto.getRandomValues(new Uint8Array(32));
+      deviceKey = bufferToHex(randomBytes.buffer);
+      await secureStorage.setSystemKey('device_master_key', deviceKey);
+    }
+
+    this.inMemoryDeviceKey = deviceKey;
+    return deviceKey;
+  }
+
+  /**
+   * Computes a SHA-256 fingerprint hash of a secret (without storing or revealing plaintext key).
+   */
+  public static async computeFingerprint(secret: string): Promise<string> {
+    if (!secret) return '';
+    const crypto = getCrypto();
+    const encoder = new TextEncoder();
+    const data = encoder.encode(secret.trim());
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    return bufferToHex(hashBuffer);
+  }
 
   private static async deriveKey(crypto: Crypto, secretKey: string, salt: Uint8Array): Promise<CryptoKey> {
     const encoder = new TextEncoder();
@@ -62,10 +100,11 @@ export class SecureCrypto {
   }
 
   /**
-   * Encrypts a raw API key using AES-GCM 256-bit with PBKDF2 key derivation.
+   * Encrypts any raw secret (API key, OAuth token, etc.) using AES-GCM 256-bit with PBKDF2.
+   * Uses device master key or an optional user passphrase.
    */
-  public static async encryptApiKey(rawKey: string, userId: string): Promise<string> {
-    if (!rawKey || rawKey.trim() === '') return '';
+  public static async encryptSecret(plaintext: string, userPassphrase?: string): Promise<string> {
+    if (!plaintext || plaintext.trim() === '') return '';
 
     const crypto = getCrypto();
     const encoder = new TextEncoder();
@@ -73,73 +112,121 @@ export class SecureCrypto {
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const iv = crypto.getRandomValues(new Uint8Array(12));
 
-    const masterSecret = `trackr_secret_key_${userId}_v1`;
+    const masterSecret = userPassphrase && userPassphrase.trim().length > 0 
+      ? userPassphrase.trim() 
+      : await this.getOrCreateDeviceMasterKey();
+
     const derivedKey = await this.deriveKey(crypto, masterSecret, salt);
 
     const ciphertextBuffer = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv: iv as BufferSource },
       derivedKey,
-      encoder.encode(rawKey.trim())
+      encoder.encode(plaintext.trim())
     );
 
     const saltHex = bufferToHex(salt.buffer);
     const ivHex = bufferToHex(iv.buffer);
     const ciphertextHex = bufferToHex(ciphertextBuffer);
 
-    return `${this.PREFIX}${saltHex}:${ivHex}:${ciphertextHex}`;
+    return `${this.PREFIX_V2}${saltHex}:${ivHex}:${ciphertextHex}`;
   }
 
   /**
-   * Decrypts an AES-GCM encrypted API key payload. 
-   * Provides automatic legacy base64 fallback migration support.
+   * Decrypts an encrypted secret payload (enc:v2: or enc:v1:).
    */
-  public static async decryptApiKey(encryptedPayload: string, userId: string): Promise<string> {
+  public static async decryptSecret(
+    encryptedPayload: string, 
+    userPassphrase?: string,
+    legacyUserId?: string
+  ): Promise<string> {
     if (!encryptedPayload) return '';
 
-    // Handle legacy Base64 salt encryption fallback
-    if (!encryptedPayload.startsWith(this.PREFIX)) {
+    const crypto = getCrypto();
+    const decoder = new TextDecoder();
+
+    // Handle enc:v2: payload
+    if (encryptedPayload.startsWith(this.PREFIX_V2)) {
       try {
-        let decoded = '';
-        if (typeof window !== 'undefined') {
-          decoded = atob(encryptedPayload);
-        } else {
-          decoded = Buffer.from(encryptedPayload, 'base64').toString('utf-8');
-        }
-        if (decoded.includes('trackr_v2_salt_')) {
-          return decoded.replace('trackr_v2_salt_', '');
-        }
-        return encryptedPayload;
-      } catch {
-        return encryptedPayload;
+        const payloadWithoutPrefix = encryptedPayload.substring(this.PREFIX_V2.length);
+        const parts = payloadWithoutPrefix.split(':');
+        if (parts.length !== 3) return '';
+
+        const [saltHex, ivHex, ciphertextHex] = parts;
+        const salt = hexToBuffer(saltHex);
+        const iv = hexToBuffer(ivHex);
+        const ciphertext = hexToBuffer(ciphertextHex);
+
+        const masterSecret = userPassphrase && userPassphrase.trim().length > 0 
+          ? userPassphrase.trim() 
+          : await this.getOrCreateDeviceMasterKey();
+
+        const derivedKey = await this.deriveKey(crypto, masterSecret, salt);
+
+        const decryptedBuffer = await crypto.subtle.decrypt(
+          { name: 'AES-GCM', iv: iv as BufferSource },
+          derivedKey,
+          ciphertext as BufferSource
+        );
+
+        return decoder.decode(decryptedBuffer);
+      } catch (err) {
+        console.error('Failed to decrypt secret (v2):', err);
+        return '';
       }
     }
 
-    try {
-      const crypto = getCrypto();
-      const decoder = new TextDecoder();
-      
-      const payloadWithoutPrefix = encryptedPayload.substring(this.PREFIX.length);
-      const parts = payloadWithoutPrefix.split(':');
-      if (parts.length !== 3) return '';
+    // Handle legacy enc:v1: payload (which used userId)
+    if (encryptedPayload.startsWith(this.PREFIX_V1)) {
+      try {
+        const payloadWithoutPrefix = encryptedPayload.substring(this.PREFIX_V1.length);
+        const parts = payloadWithoutPrefix.split(':');
+        if (parts.length !== 3) return '';
 
-      const [saltHex, ivHex, ciphertextHex] = parts;
-      const salt = hexToBuffer(saltHex);
-      const iv = hexToBuffer(ivHex);
-      const ciphertext = hexToBuffer(ciphertextHex);
+        const [saltHex, ivHex, ciphertextHex] = parts;
+        const salt = hexToBuffer(saltHex);
+        const iv = hexToBuffer(ivHex);
+        const ciphertext = hexToBuffer(ciphertextHex);
 
-      const masterSecret = `trackr_secret_key_${userId}_v1`;
-      const derivedKey = await this.deriveKey(crypto, masterSecret, salt);
+        const masterSecret = `trackr_secret_key_${legacyUserId || 'default'}_v1`;
+        const derivedKey = await this.deriveKey(crypto, masterSecret, salt);
 
-      const decryptedBuffer = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv: iv as BufferSource },
-        derivedKey,
-        ciphertext as BufferSource
-      );
+        const decryptedBuffer = await crypto.subtle.decrypt(
+          { name: 'AES-GCM', iv: iv as BufferSource },
+          derivedKey,
+          ciphertext as BufferSource
+        );
 
-      return decoder.decode(decryptedBuffer);
-    } catch (err) {
-      console.error('Failed to decrypt API key:', err);
-      return '';
+        return decoder.decode(decryptedBuffer);
+      } catch (err) {
+        console.error('Failed to decrypt legacy secret (v1):', err);
+        return '';
+      }
     }
+
+    // Handle unencrypted / legacy base64 strings
+    try {
+      let decoded = '';
+      if (typeof window !== 'undefined' && window.atob) {
+        decoded = window.atob(encryptedPayload);
+      } else {
+        decoded = Buffer.from(encryptedPayload, 'base64').toString('utf-8');
+      }
+      if (decoded.includes('trackr_v2_salt_')) {
+        return decoded.replace('trackr_v2_salt_', '');
+      }
+      return encryptedPayload;
+    } catch {
+      return encryptedPayload;
+    }
+  }
+
+  // --- Legacy Alias Accessors ---
+
+  public static async encryptApiKey(rawKey: string, userId: string): Promise<string> {
+    return this.encryptSecret(rawKey);
+  }
+
+  public static async decryptApiKey(encryptedPayload: string, userId: string): Promise<string> {
+    return this.decryptSecret(encryptedPayload, undefined, userId);
   }
 }

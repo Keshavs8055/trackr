@@ -85,15 +85,6 @@ export function useUpdateResource() {
           newStatus: update.status,
         });
       }
-
-      if (update.progress && currentResource?.progress?.percentage !== update.progress.percentage) {
-        EventBus.getInstance().publish('ProgressUpdated', {
-          userId: user.uid,
-          resourceId: id,
-          resourceTitle: currentResource?.title || update.title,
-          progress: update.progress,
-        });
-      }
     },
     onMutate: async ({ id, ...update }) => {
       await queryClient.cancelQueries({ queryKey: ['resources', user?.uid] });

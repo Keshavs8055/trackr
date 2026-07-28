@@ -4,7 +4,7 @@ import React from 'react';
 import { useResourceActivities } from '@/hooks/use-activities';
 import { ActivityAction, ResourceActivity } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
-import { Sparkles, ArrowRightLeft, TrendingUp, RefreshCw, FileText, Trash2, Clock, History } from 'lucide-react';
+import { Sparkles, ArrowRightLeft, RefreshCw, FileText, Trash2, Clock, History } from 'lucide-react';
 
 interface ActivityTimelineProps {
   resourceId: string;
@@ -13,7 +13,6 @@ interface ActivityTimelineProps {
 const ACTION_ICONS: Record<ActivityAction, React.ElementType> = {
   created: Sparkles,
   status_changed: ArrowRightLeft,
-  progress_updated: TrendingUp,
   metadata_refreshed: RefreshCw,
   note_added: FileText,
   relationship_added: Sparkles,
@@ -23,7 +22,6 @@ const ACTION_ICONS: Record<ActivityAction, React.ElementType> = {
 const ACTION_COLORS: Record<ActivityAction, { text: string; bg: string; border: string }> = {
   created: { text: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'border-emerald-400/20' },
   status_changed: { text: 'text-blue-400', bg: 'bg-blue-400/10', border: 'border-blue-400/20' },
-  progress_updated: { text: 'text-purple-400', bg: 'bg-purple-400/10', border: 'border-purple-400/20' },
   metadata_refreshed: { text: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/20' },
   note_added: { text: 'text-slate-400', bg: 'bg-slate-400/10', border: 'border-slate-400/20' },
   relationship_added: { text: 'text-indigo-400', bg: 'bg-indigo-400/10', border: 'border-indigo-400/20' },
@@ -40,12 +38,6 @@ function formatActionText(activity: ResourceActivity): string {
         return `Changed status from "${payload.oldStatus}" to "${payload.newStatus}"`;
       }
       return `Updated status to "${payload?.newStatus || 'new status'}"`;
-    case 'progress_updated':
-      const p = payload?.progress as any;
-      if (p) {
-        return `Updated progress to ${p.current} / ${p.total || '∞'} ${p.unit} (${p.percentage}%)`;
-      }
-      return 'Updated progress';
     case 'metadata_refreshed':
       return `Refreshed metadata from ${payload?.provider || 'provider'}`;
     case 'note_added':

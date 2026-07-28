@@ -27,6 +27,10 @@ export class OpenLibraryProvider extends BaseProvider {
     return true; // Open Library is free & public
   }
 
+  public override async validateCredentials(): Promise<boolean> {
+    return true;
+  }
+
   public async searchNormalized(queryStr: string, page: number = 1): Promise<PaginatedSearchResults> {
     if (!queryStr.trim()) {
       return { results: [], page: 1, pageSize: 10, hasMore: false, totalResults: 0 };

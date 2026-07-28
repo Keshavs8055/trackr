@@ -6,9 +6,9 @@ import { useAppStore } from "@/store/app-store";
 import { useAddResource, useUserTags } from "@/hooks/use-resources";
 import { providerManager } from "@/services/providers/provider-manager";
 import { useProviderSearch } from "@/hooks/use-provider-search";
-import { Loader2, X, Hash, CornerDownLeft, Sparkles } from "lucide-react";
+import { Loader2, X, Hash, CornerDownLeft, Sparkles, Globe, Link2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { HASHTAG_REGEX, formatTag, extractTags, cleanTitle } from "@/lib/parser";
+import { HASHTAG_REGEX, formatTag, extractTags, cleanTitle, extractUrl } from "@/lib/parser";
 import { PROVIDERS, RESERVED_TYPE_TAGS, RESOURCE_TYPES, ResourceType, SearchResult } from "@/types";
 
 export function QuickAdd() {
@@ -155,9 +155,15 @@ export function QuickAdd() {
     setIsSaving(true);
     
     const rawInput = inputValue;
-    const formattedTags = extractTags(inputValue);
+    const detectedUrl = extractUrl(inputValue);
+    let formattedTags = extractTags(inputValue);
+    if (detectedUrl && !formattedTags.includes('link')) {
+      formattedTags = [...formattedTags, 'link'];
+    }
     const title = cleanTitle(inputValue);
-    const inferredType = inferTypeFromTags(formattedTags);
+    const inferredType = detectedUrl 
+      ? (detectedUrl.includes('github.com') ? RESOURCE_TYPES.GITHUB : RESOURCE_TYPES.WEBSITE)
+      : inferTypeFromTags(formattedTags);
 
     try {
       await addResource({ 
@@ -165,8 +171,9 @@ export function QuickAdd() {
         type: inferredType,
         provider: PROVIDERS.MANUAL,
         tags: formattedTags, 
+        url: detectedUrl || undefined,
         rawInput,
-        metadata: {},
+        metadata: detectedUrl ? { url: detectedUrl } : {},
       });
       setQuickAddOpen(false);
       setInputValue("");
@@ -205,6 +212,7 @@ export function QuickAdd() {
   };
 
   const currentTags = React.useMemo(() => extractTags(inputValue), [inputValue]);
+  const detectedUrl = React.useMemo(() => extractUrl(inputValue), [inputValue]);
   const currentType = React.useMemo(() => inferTypeFromTags(currentTags), [currentTags]);
   const cleanSearchQuery = React.useMemo(() => cleanTitle(inputValue), [inputValue]);
 
@@ -229,12 +237,12 @@ export function QuickAdd() {
     <>
       <AnimatePresence>
         {quickAddOpen && (
-          <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/35 backdrop-blur-xs md:items-center p-4 pt-12 md:p-4 animate-in fade-in duration-200">
+          <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/35 backdrop-blur-overlay md:items-center p-4 pt-12 md:p-4 animate-in fade-in duration-200">
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0" 
+              className="absolute inset-0 gpu-accelerated" 
               onClick={() => setQuickAddOpen(false)} 
             />
 
@@ -243,7 +251,7 @@ export function QuickAdd() {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: -40, opacity: 0 }}
               transition={{ type: "spring", damping: 25, stiffness: 350 }}
-              className="relative z-10 w-full max-w-lg bg-card border border-border rounded-2xl shadow-xl flex flex-col overflow-hidden"
+              className="relative z-10 w-full max-w-lg bg-card border border-border rounded-2xl shadow-xl flex flex-col overflow-hidden gpu-accelerated"
             >
               <Command className="flex flex-col w-full" shouldFilter={false}>
                 <div className="flex items-center px-4 py-2 border-b border-border/30">
@@ -280,6 +288,25 @@ export function QuickAdd() {
                   )}
                 </div>
                 
+                {detectedUrl && (
+                  <div className="mx-3 my-2 p-2.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Globe className="size-3.5 text-cyan-400 shrink-0" />
+                      <div className="min-w-0">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-400 block leading-none mb-0.5">
+                          Link Resource Detected
+                        </span>
+                        <p className="text-xs font-mono text-muted-foreground truncate">
+                          {detectedUrl}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[10px] font-bold shrink-0">
+                      #link
+                    </span>
+                  </div>
+                )}
+
                 {globalTags.length > 0 && (
                   <div className="border-b border-border/30 max-h-[160px] overflow-y-auto p-2 bg-secondary/5">
                     <div className="px-1 pb-1.5 text-[9px] font-bold text-muted-foreground/60 uppercase tracking-widest flex items-center gap-1">

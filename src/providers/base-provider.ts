@@ -21,13 +21,28 @@ export abstract class BaseProvider {
   public abstract readonly capabilities: ProviderCapabilities;
   
   protected config: ProviderConfig;
+  protected configuredState: boolean = false;
   private lastRequestTime: number = 0;
 
   constructor(config: ProviderConfig = { rateLimitPerMin: 60, maxRetries: 3, timeoutMs: 5000 }) {
     this.config = config;
   }
 
-  public abstract isConfigured(): boolean;
+  public isConfigured(): boolean {
+    return this.configuredState;
+  }
+
+  public setConfigured(configured: boolean): void {
+    this.configuredState = configured;
+  }
+
+  public setApiKey(_key: string | null): void {
+    // Default no-op for providers that do not require auth credentials
+  }
+
+  public getApiKey(): string | null {
+    return null;
+  }
 
   public async validateCredentials(_credentials: Record<string, string>): Promise<boolean> {
     return false;

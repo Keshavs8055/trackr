@@ -27,10 +27,14 @@ export const RESERVED_TYPE_TAGS: Record<string, ResourceType> = {
   articles: 'article',
   website: 'website',
   websites: 'website',
+  link: 'website',
+  links: 'website',
+  url: 'website',
   course: 'course',
   courses: 'course',
   github: 'github',
   repo: 'github',
+  repos: 'github',
   tool: 'tool',
   tools: 'tool',
   podcast: 'podcast',
@@ -47,6 +51,7 @@ export const PROVIDERS = {
   OPENLIBRARY: 'openlibrary',
   TMDB: 'tmdb',
   GOOGLE_BOOKS: 'google_books',
+  GEMINI: 'gemini',
 } as const;
 
 export type ProviderName = typeof PROVIDERS[keyof typeof PROVIDERS];
@@ -59,26 +64,39 @@ export type ProviderStatus =
   | 'RATE_LIMITED'
   | 'UNAVAILABLE';
 
-export type ProgressUnit = 'pages' | 'minutes' | 'episodes' | 'percent' | 'items';
-
-export interface ResourceProgress {
-  current: number;
-  total?: number;
-  unit: ProgressUnit;
-  percentage: number; // 0 to 100
-  lastUpdated: number;
-}
-
 export interface ProviderCapabilities {
   supportsSearch: boolean;
   supportsRefresh: boolean;
   supportsImages: boolean;
   supportsCredentials: boolean;
+  supportsAI?: boolean;
   canSearch?: boolean;
   canFetchMetadata?: boolean;
   canRefresh?: boolean;
   hasPosterImages?: boolean;
   requiresAuthKey?: boolean;
+  rateLimitPerMin?: number;
+}
+
+export type ConnectionHealthStatus = 'HEALTHY' | 'DEGRADED' | 'COOLING_DOWN' | 'FAILED';
+
+export interface ProviderHealth {
+  provider: ProviderName | string;
+  lastRequestTimestamp?: number;
+  lastSuccessTimestamp?: number;
+  lastErrorTimestamp?: number;
+  lastErrorMessage?: string;
+  consecutiveFailures: number;
+  totalRequests: number;
+  totalSuccesses: number;
+  totalFailures: number;
+  isCoolingDown: boolean;
+  cooldownUntil?: number;
+  connectionHealth: ConnectionHealthStatus;
+  rateLimitQuota?: {
+    remainingRequests?: number;
+    resetTime?: number;
+  };
 }
 
 export interface SearchResult {
@@ -155,11 +173,11 @@ export interface Resource {
   title: string;
   type: ResourceType;
   status?: string;
-  progress?: ResourceProgress;
   searchIndex?: string;
   notes?: string;
-  tags: string[]; // stored without #, lowercase, kebab-case
+  tags: string[]; // stored without #, lowercase, canonical
   image?: string;
+  url?: string; // Direct link URL for website / link resources
   rawInput?: string; // Exact string typed by user during creation
   createdAt: number;
   updatedAt: number;
@@ -204,6 +222,14 @@ export interface ProviderCredentialStatus {
   enabled: boolean;
   status: ProviderStatus;
   lastValidated?: number;
+  lastError?: string;
+  fingerprint?: string;
+  retryCooldown?: number;
+  connectionHealth?: ConnectionHealthStatus;
+  rateLimitQuota?: {
+    remainingRequests?: number;
+    resetTime?: number;
+  };
 }
 
 export interface Integration {
@@ -222,7 +248,7 @@ export interface Integration {
 export interface AuditLogEntry {
   id: string;
   userId: string;
-  action: 'connect' | 'disconnect' | 'enable' | 'disable' | 'credential_update' | 'metadata_refresh';
+  action: 'connect' | 'disconnect' | 'enable' | 'disable' | 'credential_update' | 'metadata_refresh' | 'revalidate_failed';
   provider: ProviderName | string;
   details?: Record<string, unknown>;
   timestamp: number;
@@ -239,7 +265,6 @@ export interface ApiResponse<T = unknown> {
 export type ActivityAction = 
   | 'created' 
   | 'status_changed' 
-  | 'progress_updated' 
   | 'note_added' 
   | 'metadata_refreshed' 
   | 'relationship_added'
@@ -265,4 +290,23 @@ export interface ResourceNote {
   wikiLinks?: string[]; // Extracted [[Resource Title]] links
   createdAt: number;
   updatedAt: number;
+}
+
+export type RelationshipType = 
+  | 'adaptation_of' 
+  | 'sequel_to' 
+  | 'prequel_to' 
+  | 'repository_for' 
+  | 'article_for' 
+  | 'author_of' 
+  | 'related_to';
+
+export interface ResourceRelationship {
+  id: string;
+  userId: string;
+  sourceResourceId: string;
+  targetResourceId: string;
+  type: RelationshipType;
+  notes?: string;
+  createdAt: number;
 }

@@ -23,19 +23,8 @@ export class OMDbProvider extends BaseProvider {
     supportsCredentials: true,
   };
 
-  private apiKey: string | null = null;
-
-  constructor(apiKey: string | null = null) {
+  constructor() {
     super({ rateLimitPerMin: 60, maxRetries: 3 });
-    this.apiKey = apiKey;
-  }
-
-  public isConfigured(): boolean {
-    return !!this.apiKey && this.apiKey.trim().length > 0;
-  }
-
-  public setApiKey(key: string | null): void {
-    this.apiKey = key;
   }
 
   public async validateCredentials(credentials: Record<string, string>): Promise<boolean> {
@@ -43,8 +32,7 @@ export class OMDbProvider extends BaseProvider {
     if (!key || key.trim() === '') return false;
 
     try {
-      // Validate by querying OMDb with a standard title
-      const res = await fetch(`https://www.omdbapi.com/?apikey=${encodeURIComponent(key)}&t=Inception`);
+      const res = await fetch(`https://www.omdbapi.com/?apikey=${encodeURIComponent(key.trim())}&t=Inception`);
       if (!res.ok) return false;
       const data = await res.json();
       if (data.Response === 'False' && data.Error === 'Invalid API key!') {
@@ -56,8 +44,8 @@ export class OMDbProvider extends BaseProvider {
     }
   }
 
-  public async searchNormalized(queryStr: string, page: number = 1): Promise<PaginatedSearchResults> {
-    if (!this.isConfigured()) {
+  public async searchNormalizedWithKey(queryStr: string, apiKey: string, page: number = 1): Promise<PaginatedSearchResults> {
+    if (!apiKey || apiKey.trim() === '') {
       throw AppError.unconfiguredProvider(this.displayName);
     }
     if (!queryStr.trim()) {
@@ -65,7 +53,7 @@ export class OMDbProvider extends BaseProvider {
     }
 
     return this.executeWithRetry(async () => {
-      const url = `https://www.omdbapi.com/?apikey=${encodeURIComponent(this.apiKey!)}&s=${encodeURIComponent(queryStr.trim())}&page=${page}`;
+      const url = `https://www.omdbapi.com/?apikey=${encodeURIComponent(apiKey.trim())}&s=${encodeURIComponent(queryStr.trim())}&page=${page}`;
       const res = await fetch(url);
       if (!res.ok) {
         throw AppError.networkError(this.displayName);
@@ -84,12 +72,6 @@ export class OMDbProvider extends BaseProvider {
 
       const total = parseInt(data.totalResults || '0', 10);
       const results: SearchResult[] = (data.Search || []).map((item: any) => {
-        const metaPreview = {
-          imdbID: item.imdbID,
-          year: item.Year,
-          type: item.Type,
-        };
-
         return {
           provider: this.name,
           providerId: item.imdbID,
@@ -98,68 +80,34 @@ export class OMDbProvider extends BaseProvider {
           description: `Type: ${item.Type || 'movie'}`,
           image: item.Poster && item.Poster !== 'N/A' ? item.Poster : undefined,
           type: item.Type === 'series' ? RESOURCE_TYPES.TV : RESOURCE_TYPES.MOVIE,
-          year: parseInt(item.Year, 10) || undefined,
-          metadataPreview: metaPreview,
+          year: item.Year ? parseInt(item.Year, 10) : undefined,
+          metadataPreview: {
+            imdbID: item.imdbID,
+            year: item.Year,
+            type: item.Type,
+          },
           providerMetadata: {
             provider: this.name,
             providerId: item.imdbID,
-            metadata: metaPreview,
-            version: 1,
+            lastSynced: Date.now(),
+            version: 'v1',
+            schemaVersion: 1,
+            metadata: {
+              imdbID: item.imdbID,
+              poster: item.Poster !== 'N/A' ? item.Poster : null,
+              year: item.Year,
+              type: item.Type,
+            },
           },
         };
       });
 
-      const hasMore = page * 10 < total;
       return {
         results,
         page,
         pageSize: 10,
-        hasMore,
+        hasMore: page * 10 < total,
         totalResults: total,
-      };
-    });
-  }
-
-  public async getDetailsNormalized(providerId: string): Promise<{
-    title: string;
-    image?: string;
-    metadata: Record<string, unknown>;
-  }> {
-    if (!this.isConfigured()) {
-      throw AppError.unconfiguredProvider(this.displayName);
-    }
-
-    return this.executeWithRetry(async () => {
-      const url = `https://www.omdbapi.com/?apikey=${encodeURIComponent(this.apiKey!)}&i=${encodeURIComponent(providerId)}&plot=full`;
-      const res = await fetch(url);
-      if (!res.ok) throw AppError.networkError(this.displayName);
-
-      const data = await res.json();
-      if (data.Response === 'False') {
-        throw AppError.notFound(`Movie (${providerId})`);
-      }
-
-      // Map strictly useful movie metadata
-      const metadata: Record<string, unknown> = {
-        title: data.Title,
-        year: parseInt(data.Year, 10) || data.Year,
-        rated: data.Rated !== 'N/A' ? data.Rated : undefined,
-        released: data.Released !== 'N/A' ? data.Released : undefined,
-        runtime: data.Runtime !== 'N/A' ? data.Runtime : undefined,
-        genre: data.Genre !== 'N/A' ? data.Genre : undefined,
-        director: data.Director !== 'N/A' ? data.Director : undefined,
-        actors: data.Actors !== 'N/A' ? data.Actors : undefined,
-        overview: data.Plot !== 'N/A' ? data.Plot : undefined,
-        language: data.Language !== 'N/A' ? data.Language : undefined,
-        poster: data.Poster !== 'N/A' ? data.Poster : undefined,
-        imdbRating: data.imdbRating !== 'N/A' ? data.imdbRating : undefined,
-        imdbID: data.imdbID,
-      };
-
-      return {
-        title: data.Title,
-        image: data.Poster !== 'N/A' ? data.Poster : undefined,
-        metadata,
       };
     });
   }

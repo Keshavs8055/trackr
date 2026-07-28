@@ -12,7 +12,7 @@ interface StatusBadgeProps {
   compact?: boolean;
 }
 
-export function StatusBadge({ resource, compact = false }: StatusBadgeProps) {
+export const StatusBadge = React.memo(function StatusBadge({ resource, compact = false }: StatusBadgeProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { mutateAsync: updateResource, isPending } = useUpdateResource();
 
@@ -95,4 +95,4 @@ export function StatusBadge({ resource, compact = false }: StatusBadgeProps) {
       </AnimatePresence>
     </div>
   );
-}
+});

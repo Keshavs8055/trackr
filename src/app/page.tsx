@@ -1,27 +1,32 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useResources, useFacetedTags } from "@/hooks/use-resources";
 import { ResourceCard } from "@/components/resource-card";
 import { ResourceDetails } from "@/components/resource-details";
 import { ResourceSkeleton } from "@/components/ui/resource-skeleton";
-import { IntegrationsDrawer } from "@/components/integrations-drawer";
 import { ResourceStatsBar } from "@/components/resources/resource-stats-bar";
-import { AdvancedFilterDrawer } from "@/components/search/advanced-filter-drawer";
 import { SavedSearchesBar } from "@/components/search/saved-searches-bar";
 import { useFilterStore } from "@/store/filter-store";
 import { useTagAction } from "@/hooks/use-tag-action";
 import { useAppStore } from "@/store/app-store";
-import { Search, X, WifiOff, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { Search, X, SlidersHorizontal, Settings, Option } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/ui/logo";
+import { ConnectionStatus } from "@/components/layout/connection-status";
 import React, { useDeferredValue, useRef, useEffect, useMemo, useState, useCallback } from "react";
 import { Resource } from "@/types";
+import { normalizeTag } from "@/lib/parser";
 
 import { useCollections } from "@/hooks/use-collections";
 import { CollectionGrid } from "@/components/collections/collection-grid";
 import { CollectionDetailView } from "@/components/collections/collection-detail-view";
-import { CollectionBuilderModal } from "@/components/collections/collection-builder-modal";
+import { VirtualizedResourceFeed } from "@/components/resources/virtualized-resource-feed";
 import { Collection } from "@/types";
+
+const IntegrationsDrawer = dynamic(() => import("@/components/integrations-drawer").then(mod => mod.IntegrationsDrawer), { ssr: false });
+const AdvancedFilterDrawer = dynamic(() => import("@/components/search/advanced-filter-drawer").then(mod => mod.AdvancedFilterDrawer), { ssr: false });
+const CollectionBuilderModal = dynamic(() => import("@/components/collections/collection-builder-modal").then(mod => mod.CollectionBuilderModal), { ssr: false });
 
 export default function Home() {
   const { data: resources, isLoading } = useResources();
@@ -100,10 +105,17 @@ export default function Home() {
       const matchesSearch = !deferredSearchQuery || 
         resource.title.toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
         resource.tags?.some(tag => tag.toLowerCase().includes(deferredSearchQuery.toLowerCase())) ||
-        resource.notes?.toLowerCase().includes(deferredSearchQuery.toLowerCase());
+        resource.notes?.toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+        (resource.url && resource.url.toLowerCase().includes(deferredSearchQuery.toLowerCase()));
       
-      // 2. Tags
-      const matchesTags = selectedTags.length === 0 || selectedTags.every(t => resource.tags?.includes(t));
+      // 2. Tags (with backward-compatibility tag normalization)
+      const matchesTags = selectedTags.length === 0 || selectedTags.every(selectedTag => {
+        const normSelected = normalizeTag(selectedTag);
+        return resource.tags?.some(resourceTag => {
+          const normResource = normalizeTag(resourceTag);
+          return normResource === normSelected;
+        });
+      });
 
       // 3. Types
       const matchesTypes = selectedTypes.length === 0 || selectedTypes.includes(resource.type);
@@ -176,7 +188,7 @@ export default function Home() {
               aria-label="Integrations Settings"
               title="Integrations"
             >
-              <SlidersHorizontal className="size-4" />
+              <Settings className="size-4" />
             </button>
             <ConnectionStatus />
           </div>
@@ -222,7 +234,7 @@ export default function Home() {
             className="hidden md:flex items-center gap-1.5 px-2.5 h-10 rounded-lg bg-secondary/35 hover:bg-secondary/60 border border-border/40 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all flex-shrink-0"
             title="Providers & Integrations"
           >
-            <SlidersHorizontal className="size-3.5" />
+            <Settings className="size-3.5" />
             <span>Providers</span>
           </button>
         </div>
@@ -241,11 +253,11 @@ export default function Home() {
             >
               All
             </button>
-            {globalTags.map(tag => {
+            {globalTags.map((tag, idx) => {
               const isActive = selectedTags.includes(tag);
               return (
                 <button
-                  key={tag}
+                  key={`global-tag-${tag}-${idx}`}
                   onClick={() => handleTagAction(tag)}
                   className={cn(
                     "px-3 py-1 rounded-md text-xs font-semibold transition-all active:scale-95 flex-shrink-0 border",
@@ -263,7 +275,7 @@ export default function Home() {
       </header>
 
       {/* Resource List / Collections Section */}
-      <main className="space-y-4">
+      <div className="space-y-4">
         <ResourceStatsBar resources={resources || []} />
         <SavedSearchesBar />
 
@@ -282,8 +294,8 @@ export default function Home() {
           <>
             {/* Collections Grid Overview */}
             {collections && collections.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
+              <div className="space-y-2 ">
+                <div className="flex items-center justify-between ">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Collections</span>
                   <button
                     onClick={() => {
@@ -307,25 +319,13 @@ export default function Home() {
               </div>
             )}
 
-            {filteredResources.length === 0 ? (
-              <div className="text-center py-12 space-y-1">
-                <p className="text-sm font-semibold text-muted-foreground">No resources found</p>
-                <p className="text-xs text-muted-foreground/60">
-                  {resources && resources.length === 0 
-                    ? "Your personal resource platform is empty. Add your first resource." 
-                    : "Try adjusting your search query or tags."}
-                </p>
-              </div>
-            ) : (
-              <div className="flex flex-col">
-                {filteredResources.map((resource, i) => (
-                  <ResourceCard key={resource.id} resource={resource} index={i} onOpenDetails={handleOpenDetails} />
-                ))}
-              </div>
-            )}
+            <VirtualizedResourceFeed
+              resources={filteredResources}
+              onSelectResource={(res) => handleOpenDetails(res)}
+            />
           </>
         )}
-      </main>
+      </div>
 
       {/* Collection Builder / Editor Modal */}
       <CollectionBuilderModal
@@ -352,29 +352,4 @@ export default function Home() {
       <AdvancedFilterDrawer />
     </div>
   );
-}
-
-function ConnectionStatus() {
-  const isOnline = useAppStore(s => s.isOnline);
-  const hasPendingWrites = useAppStore(s => s.hasPendingWrites);
-
-  if (!isOnline) {
-    return (
-      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-destructive/10 text-destructive border border-destructive/20 text-[9px] font-bold animate-pulse flex-shrink-0">
-        <WifiOff className="size-2.5" />
-        <span>Offline</span>
-      </div>
-    );
-  }
-
-  if (hasPendingWrites) {
-    return (
-      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[9px] font-bold flex-shrink-0">
-        <RefreshCw className="size-2.5 animate-spin" />
-        <span>Syncing...</span>
-      </div>
-    );
-  }
-
-  return null;
 }

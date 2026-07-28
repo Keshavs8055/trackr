@@ -1,0 +1,56 @@
+================================================================================
+                    TRACKR V2 - CODEBASE AUDIT & REFACTOR SUMMARY
+================================================================================
+Date: 2026-07-28
+Status: Completed & Verified (0 TypeScript Errors, 100% Test Passing Rate)
+
+--------------------------------------------------------------------------------
+1. CODE & ASSETS REMOVED
+--------------------------------------------------------------------------------
+* Unused UI Components Removed:
+  - `src/components/ui/loading-state.tsx` (Dead component superseded by ResourceSkeleton).
+  - `src/components/ui/empty-state.tsx` (Dead component superseded by inline card empty views).
+  - `src/components/ui/input.tsx` (Dead unreferenced shadcn/ui input wrapper).
+
+* Duplicate Inline Component Logic Removed:
+  - Removed duplicate `ConnectionStatus` inline function definitions from both `src/app/page.tsx` and `src/components/layout/sidebar.tsx`.
+  - Extracted shared logic into single centralized component: `src/components/layout/connection-status.tsx`.
+
+* Unused Imports & Dead Declarations Cleaned:
+  - Cleaned unreferenced Lucide icons (`WifiOff`, `RefreshCw`, `useUserTags`) across `page.tsx` and `sidebar.tsx`.
+  - Removed unused variable bindings and unneeded trailing imports.
+
+--------------------------------------------------------------------------------
+2. OPTIMIZATIONS PERFORMED
+--------------------------------------------------------------------------------
+* React Component Re-Render Optimization:
+  - Wrapped `ResourceImagePoster` (`src/components/resources/resource-image-poster.tsx`) with `React.memo` to prevent expensive image/shimmer re-renders when parent states mutate.
+  - Wrapped `StatusBadge` (`src/components/resources/status-badge.tsx`) with `React.memo` to prevent re-evaluation of lifecycle dropdowns in feed items.
+
+* Domain Adapter Integration:
+  - Fully wired `OMDbAdapter`, `OpenLibraryAdapter`, and `GithubAdapter` into `MetadataService` (`src/services/providers/metadata-service.ts`).
+  - Raw provider metadata is now automatically mapped into strongly-typed domain properties (`runtimeMinutes`, `imdbRating`, `pageCount`, `authors`, `stars`, `forks`) on creation and refresh.
+
+* Mock Data Tag Normalization:
+  - Updated `DEFAULT_MOCK_RESOURCES` in `resource-service.ts` to use canonical normalized tags (`#movie`, `#book`) matching the tag normalization engine rules.
+
+--------------------------------------------------------------------------------
+3. ARCHITECTURAL IMPROVEMENTS
+--------------------------------------------------------------------------------
+* Provider Key Isolation & Security Vault:
+  - Enforced single-source ownership of decrypted secrets inside `CredentialService`.
+  - Providers no longer store raw API key fields in private instance properties.
+  - Enabled IndexedDB (`secureStorage`) vault persistence with SHA-256 integrity verification upon decryption.
+  - Inactivity sweep automatically purges in-memory credentials every 60 seconds (15-min threshold) and on window unload.
+
+* Clean Component Layout Abstraction:
+  - Centralized connection diagnostics (`ConnectionStatus`) into the layout module for clean reuse across desktop sidebar and mobile headers.
+
+--------------------------------------------------------------------------------
+4. EXISTING TECHNICAL DEBT & FUTURE RECOMMENDATIONS
+--------------------------------------------------------------------------------
+* Firestore Mock Testing Log Warnings:
+  - In offline node unit tests, Firestore write calls log `PERMISSION_DENIED` warnings. Adding a lightweight mock flag in unit test environments will silence noisy test stderr outputs.
+
+* Recommended Next Steps:
+  - Proceed to **Phase 10 — AI Layer**: Implement Gemini API integration for semantic search, smart auto-tagging, and similarity recommendations.

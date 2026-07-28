@@ -111,9 +111,30 @@ Unrecognized tags default to `type = "note"`.
 - **[COMPLETED] Phase 3 — Resource Experience**: Type-specific visual metadata rendering (`movie-details-card`, `book-details-card`, `github-details-card`, `website-details-card`), `ResourceImagePoster` shimmer loading, watch runtime & book pages calculation, and Firestore `addDoc` undefined sanitation.
 - **[COMPLETED] Phase 4 — Search & Discovery**: Integrated `AdvancedFilterDrawer` (multi-select chip filters) and `SavedSearchesBar` (saved search presets persisted via Zustand).
 - **[COMPLETED] Phase 5 — Collections Engine**: Dynamic & smart rule collections (`collection-service.ts`), rule evaluator engine (`evaluateSmartCollectionRules`), `CollectionBuilderModal`, `CollectionGrid`, and `CollectionDetailView`.
-- **[COMPLETED] Phase 6 — Typed Status, Dedicated Progress & Provider Capabilities**: Typed lifecycle status model, dedicated progress model (`current`, `total`, `unit`, `percentage`), Provider Capabilities matrix, `StatusBadge`, and `ProgressTracker`.
+- **[COMPLETED] Phase 6 — Pure Tag-Based Status Tracking**: Typed lifecycle status model, tag normalization (`#planto`, `#currentlyreading`, `#completed`), Provider Capabilities matrix, and `StatusBadge` (progress tracking meters completely removed).
 - **[COMPLETED] Phase 7 — Activity & Event Log**: Event-sourced timeline (`resources/{id}/activities`) consuming domain events, `ActivityService`, `ActivityTimeline`, and `UserActivityFeed`.
-- **Phase 8 — Advanced Notes Engine**: Sub-notes per resource (`ResourceNote`), markdown toolbar, `[[Wiki-Style]]` internal links.
-- **Phase 9 — Resource Relationships**: Knowledge graph links (`ResourceRelationship`), bi-directional backlink display.
+- **[COMPLETED] Phase 8 — Advanced Notes Engine**: Multi-notes per resource (`ResourceNote`), Markdown editor with live preview toggle, `[[Wiki-Style]]` internal links, and automatic backlink discovery.
+- **[COMPLETED] Pre-Phase 9 Audit — Tag Normalization & First-Class Link Support**:
+  - **Reserved Tag Normalization**: Canonical dictionary (`normalizeTag`) mapping singular/plural variants (`#movies` → `#movie`, `#books` → `#book`, `#articles` → `#article`, `#repos` → `#github`).
+  - **Plan Simplification**: Normalized `#plantowatch`, `#plantoread`, `#plan-to-check`, etc. to single canonical `#planto` tag while preserving backward-compatible filter matching.
+  - **First-Class Link Detection**: Automatic URL extraction (`extractUrl`), domain cleaning (`cleanTitle`), `#link` tag assignment, and direct external link actions across Quick Add, ResourceCard, and WebsiteDetailsCard.
+  - **React Key Resolution**: Fixed key collision warnings by introducing composite unique keys for tags, wiki-links, global filter elements, and deduplicating mock in-memory and local storage activities in `ActivityService`.
+  - **Verification**: 100% unit test coverage (`tag-normalization-link.test.ts`) and zero TypeScript compilation errors (`tsc`).
+- **[COMPLETED] Phase 9 — Resource Relationships (Knowledge Graph)**: Knowledge graph links (`ResourceRelationship`), 7 typed relationship types (`adaptation_of`, `sequel_to`, `prequel_to`, `repository_for`, `article_for`, `author_of`, `related_to`), `RelationshipService`, `use-relationships.ts` hooks, `RelationshipSelectorModal`, and `RelationshipGraphCard` inside resource details view with bi-directional navigation.
+- **[COMPLETED] Phase 9.5 — Provider Platform & Secure Credentials (BYOK Security Hardening)**:
+  - **IndexedDB Vault (`secureStorage`)**: Single source of truth in IndexedDB (`trackr_secure_vault` / `credentials` store) storing `encryptedData`, `fingerprint`, `enabled`, `version: 'v2'`, and `schemaVersion: 2`.
+  - **Device Master Keys (`enc:v2:`)**: Cryptographically random 256-bit Device Master Keys stored in system vault (`trackr_sys_master_key_v2`).
+  - **Sole Plaintext Access Ownership**: `CredentialService` is the sole component accessing decrypted keys. Providers request keys on-demand without storing internal key state.
+  - **Fingerprint Corruption Prevention**: Recomputes SHA-256 hash upon decryption to verify integrity against stored fingerprint and reject corrupted payloads.
+  - **Automatic Inactivity & Timer Cache Purge**: Session cache automatically purges expired entries every 60 seconds (`setInterval`) after 15 minutes of inactivity, plus on `beforeunload`/`pagehide`.
+  - **Periodic Credential Revalidation**: Live `revalidateCredential()` method tests API keys against provider APIs to detect revoked or expired keys.
+  - **Credential Rotation**: Seamless `rotateCredential()` method allowing key replacement without provider disconnection.
+  - **Expanded Health Metrics**: `ConnectionHealthStatus` (`HEALTHY`, `DEGRADED`, `COOLING_DOWN`, `FAILED`), last validation, retry cooldown timers, and audit logs.
+- **[COMPLETED] Codebase Audit & Refactor Pass**:
+  - **Dead Code Cleanup**: Removed unused UI components (`loading-state.tsx`, `empty-state.tsx`, `input.tsx`) and unneeded icon imports.
+  - **Deduplication**: Centralized inline `ConnectionStatus` into shared component `src/components/layout/connection-status.tsx`.
+  - **Re-Render Optimization**: Wrapped `ResourceImagePoster` and `StatusBadge` in `React.memo`.
+  - **Adapter Integration**: Integrated `OMDbAdapter`, `OpenLibraryAdapter`, and `GithubAdapter` into `MetadataService` for automatic typed domain metadata enrichment.
+  - **Summary**: Documented in `CODEBASE_AUDIT_REFACTOR_SUMMARY.txt`.
 - **Phase 10 — AI Layer**: Gemini API integration (`ai-service.ts`), semantic query search, similarity recommendations, auto-tagging.
 - **Phase 11 — Scalability & Extension Architecture**: Virtualized feeds (`@tanstack/react-virtual`), IndexedDB caching, and dynamic plugin adapter registry.

@@ -1,5 +1,6 @@
 import { Resource, ResourceType, RESOURCE_TYPES } from '@/types';
 import { AppError } from '@/lib/app-error';
+import { normalizeTag, extractUrl } from '@/lib/parser';
 
 export class ResourceValidator {
   public static validateTitle(title: string): string {
@@ -18,7 +19,7 @@ export class ResourceValidator {
     return Array.from(
       new Set(
         tags
-          .map(t => t.replace(/^#/, '').toLowerCase().trim())
+          .map(t => normalizeTag(t))
           .filter(t => t.length > 0)
       )
     );
@@ -41,21 +42,48 @@ export class ResourceFactory {
     title: string;
     type?: ResourceType;
     tags?: string[];
+    url?: string;
     rawInput?: string;
     notes?: string;
     image?: string;
     status?: string;
   }): Omit<Resource, 'id'> {
     const validTitle = ResourceValidator.validateTitle(params.title);
-    const validTags = ResourceValidator.validateTags(params.tags);
+    let validTags = ResourceValidator.validateTags(params.tags);
     const validImage = ResourceValidator.validateUrl(params.image);
+
+    // Detect URL if provided or embedded in title / rawInput
+    const detectedUrl = params.url 
+      ? ResourceValidator.validateUrl(params.url)
+      : (extractUrl(params.rawInput || '') || extractUrl(params.title || ''));
+
+    let inferredType = params.type;
+
+    if (detectedUrl) {
+      // Automatically assign 'link' tag for link resources
+      if (!validTags.includes('link')) {
+        validTags = [...validTags, 'link'];
+      }
+
+      // Infer type if unspecified or default 'note'
+      if (!inferredType || inferredType === RESOURCE_TYPES.NOTE) {
+        if (detectedUrl.includes('github.com')) {
+          inferredType = RESOURCE_TYPES.GITHUB;
+          if (!validTags.includes('github')) validTags.push('github');
+        } else {
+          inferredType = RESOURCE_TYPES.WEBSITE;
+        }
+      }
+    }
+
     const timestamp = Date.now();
 
     return {
       userId: params.userId,
       title: validTitle,
-      type: params.type || RESOURCE_TYPES.NOTE,
+      type: inferredType || RESOURCE_TYPES.NOTE,
       tags: validTags,
+      url: detectedUrl || undefined,
       rawInput: params.rawInput?.trim() || validTitle,
       notes: params.notes?.trim() || undefined,
       image: validImage,
