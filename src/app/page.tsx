@@ -10,13 +10,13 @@ import { SavedSearchesBar } from "@/components/search/saved-searches-bar";
 import { useFilterStore } from "@/store/filter-store";
 import { useTagAction } from "@/hooks/use-tag-action";
 import { useAppStore } from "@/store/app-store";
-import { Search, X, SlidersHorizontal, Settings, Option } from "lucide-react";
+import { Search, X, SlidersHorizontal, Settings, Option, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/ui/logo";
 import { ConnectionStatus } from "@/components/layout/connection-status";
 import React, { useDeferredValue, useRef, useEffect, useMemo, useState, useCallback } from "react";
 import { Resource } from "@/types";
-import { normalizeTag } from "@/lib/parser";
+import { normalizeTag, getStatusSynonymTags } from "@/lib/parser";
 
 import { useCollections } from "@/hooks/use-collections";
 import { CollectionGrid } from "@/components/collections/collection-grid";
@@ -24,9 +24,12 @@ import { CollectionDetailView } from "@/components/collections/collection-detail
 import { VirtualizedResourceFeed } from "@/components/resources/virtualized-resource-feed";
 import { Collection } from "@/types";
 
+
 const IntegrationsDrawer = dynamic(() => import("@/components/integrations-drawer").then(mod => mod.IntegrationsDrawer), { ssr: false });
 const AdvancedFilterDrawer = dynamic(() => import("@/components/search/advanced-filter-drawer").then(mod => mod.AdvancedFilterDrawer), { ssr: false });
 const CollectionBuilderModal = dynamic(() => import("@/components/collections/collection-builder-modal").then(mod => mod.CollectionBuilderModal), { ssr: false });
+const AICommandModal = dynamic(() => import("@/components/ai/ai-command-modal").then(mod => mod.AICommandModal), { ssr: false });
+
 
 export default function Home() {
   const { data: resources, isLoading } = useResources();
@@ -34,7 +37,9 @@ export default function Home() {
   
   const [selectedCollection, setSelectedCollection] = useState<Collection | null>(null);
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
+  const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
+
   
   const { 
     searchQuery, 
@@ -103,18 +108,21 @@ export default function Home() {
     return resources.filter(resource => {
       // 1. Search Query
       const matchesSearch = !deferredSearchQuery || 
-        resource.title.toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
-        resource.tags?.some(tag => tag.toLowerCase().includes(deferredSearchQuery.toLowerCase())) ||
-        resource.notes?.toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
-        (resource.url && resource.url.toLowerCase().includes(deferredSearchQuery.toLowerCase()));
+        (typeof resource.title === 'string' && resource.title.toLowerCase().includes(deferredSearchQuery.toLowerCase())) ||
+        resource.tags?.some(tag => typeof tag === 'string' && tag.toLowerCase().includes(deferredSearchQuery.toLowerCase())) ||
+        (typeof resource.notes === 'string' && resource.notes.toLowerCase().includes(deferredSearchQuery.toLowerCase())) ||
+        (typeof resource.url === 'string' && resource.url.toLowerCase().includes(deferredSearchQuery.toLowerCase()));
       
-      // 2. Tags (with backward-compatibility tag normalization)
+      // 2. Tags (with status tag synonym matching)
       const matchesTags = selectedTags.length === 0 || selectedTags.every(selectedTag => {
         const normSelected = normalizeTag(selectedTag);
-        return resource.tags?.some(resourceTag => {
+        const hasDirectTag = resource.tags?.some(resourceTag => {
           const normResource = normalizeTag(resourceTag);
           return normResource === normSelected;
         });
+        if (hasDirectTag) return true;
+        const statusSynonyms = getStatusSynonymTags(resource.status);
+        return statusSynonyms.some(syn => normalizeTag(syn) === normSelected);
       });
 
       // 3. Types
@@ -216,6 +224,15 @@ export default function Home() {
           </div>
           
           <button
+            onClick={() => setIsAIModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 h-10 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-xs font-semibold text-purple-300 transition-all flex-shrink-0"
+            title="AI Assistant (Cmd+Shift+K)"
+          >
+            <Sparkles className="size-3.5 text-purple-400" />
+            <span className="hidden sm:inline">Ask AI</span>
+          </button>
+
+          <button
             onClick={() => setFilterDrawerOpen(true)}
             className="flex items-center gap-1.5 px-3 h-10 rounded-lg bg-secondary/35 hover:bg-secondary/60 border border-border/40 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all flex-shrink-0"
             title="Advanced Filters"
@@ -238,6 +255,7 @@ export default function Home() {
             <span>Providers</span>
           </button>
         </div>
+
 
         {/* Tag Filters (compact horizontal scroll) */}
         {globalTags.length > 0 && (
@@ -350,6 +368,14 @@ export default function Home() {
 
       {/* Advanced Filter Drawer */}
       <AdvancedFilterDrawer />
+
+      {/* AI Command Modal */}
+      <AICommandModal
+        isOpen={isAIModalOpen}
+        onClose={() => setIsAIModalOpen(false)}
+        allResources={resources || []}
+        onSelectResource={(res) => handleOpenDetails(res)}
+      />
     </div>
   );
 }

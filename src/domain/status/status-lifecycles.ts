@@ -61,10 +61,11 @@ export function getStatusesForType(type: ResourceType | string): StatusConfig[] 
 
 export function getStatusConfig(type: ResourceType | string, status?: string): StatusConfig {
   const statuses = getStatusesForType(type);
-  if (!status) return statuses[0];
-  return statuses.find(s => s.value.toLowerCase() === status.toLowerCase()) || {
-    value: status,
-    label: status.replace(/_/g, ' ').toUpperCase(),
+  if (!status || typeof status !== 'string') return statuses[0];
+  const safeStatus = status;
+  return statuses.find(s => s.value.toLowerCase() === safeStatus.toLowerCase()) || {
+    value: safeStatus,
+    label: safeStatus.replace(/_/g, ' ').toUpperCase(),
     colorClass: 'text-muted-foreground',
     bgClass: 'bg-secondary/40 border-border/40',
   };

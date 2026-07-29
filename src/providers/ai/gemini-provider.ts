@@ -41,24 +41,49 @@ export class GeminiProvider extends BaseAIProvider {
     }
   }
 
-  public async generateTags(_text: string, _options?: AITagOptions): Promise<string[]> {
-    if (!this.isConfigured()) {
-      throw AppError.unconfiguredProvider(this.displayName);
-    }
-    throw new AppError('AI_NOT_IMPLEMENTED', 'Gemini AI provider integration will be fully activated in Phase 10.');
+  public async generateTags(promptOrText: string, options?: AITagOptions & { apiKey?: string; model?: string }): Promise<string[]> {
+    const rawText = await this.executePrompt(promptOrText, options);
+    try {
+      const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (Array.isArray(parsed)) return parsed.map((t: string) => String(t).replace(/^#/, '').trim().toLowerCase());
+      }
+    } catch {}
+    return [];
   }
 
-  public async summarize(_text: string, _options?: AISummarizeOptions): Promise<string> {
-    if (!this.isConfigured()) {
-      throw AppError.unconfiguredProvider(this.displayName);
-    }
-    throw new AppError('AI_NOT_IMPLEMENTED', 'Gemini AI provider integration will be fully activated in Phase 10.');
+  public async summarize(promptOrText: string, options?: AISummarizeOptions & { apiKey?: string; model?: string }): Promise<string> {
+    return await this.executePrompt(promptOrText, options);
   }
 
-  public async executePrompt(_prompt: string, _context?: Record<string, unknown>): Promise<string> {
-    if (!this.isConfigured()) {
+  public async executePrompt(prompt: string, options?: { apiKey?: string; model?: string; temperature?: number; maxTokens?: number }): Promise<string> {
+    const apiKey = options?.apiKey || this.getApiKey();
+    if (!apiKey) {
       throw AppError.unconfiguredProvider(this.displayName);
     }
-    throw new AppError('AI_NOT_IMPLEMENTED', 'Gemini AI provider integration will be fully activated in Phase 10.');
+
+    const model = options?.model || 'gemini-1.5-flash';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey.trim())}`;
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: options?.temperature ?? 0.2,
+          maxOutputTokens: options?.maxTokens ?? 1024,
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new AppError('AI_EXECUTION_FAILED', `Gemini request failed (${res.status}): ${errText}`);
+    }
+
+    const data = await res.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
   }
 }

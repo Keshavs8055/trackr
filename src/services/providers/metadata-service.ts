@@ -1,5 +1,6 @@
 import { providerManager } from './provider-manager';
 import { providerCache } from '@/cache/provider-cache';
+import { credentialService } from './credential-service';
 import { Resource, ResourceProviderMetadata } from '@/types';
 import { AppError } from '@/lib/app-error';
 import { OMDbAdapter, OpenLibraryAdapter, GithubAdapter } from '@/domain/adapters/provider-adapters';
@@ -21,6 +22,7 @@ export class MetadataService {
    * Fetches provider details and returns normalized metadata object for initial creation.
    */
   public async fetchMetadataForCreation(
+    userId: string,
     providerName: string,
     providerId: string
   ): Promise<{
@@ -73,7 +75,16 @@ export class MetadataService {
       };
     }
 
-    const details = await provider.getDetailsNormalized(providerId);
+    // Get the key if provider requires credentials
+    let apiKey: string | null = null;
+    if (provider.capabilities.supportsCredentials) {
+      apiKey = await credentialService.getCredential(userId, providerName);
+      if (!apiKey) {
+        throw AppError.unconfiguredProvider(provider.displayName);
+      }
+    }
+
+    const details = await provider.getDetailsNormalized(providerId, apiKey || undefined);
     const adapted = adaptRawMetadata(providerName, details.metadata);
     const enrichedMetadata = { ...details.metadata, ...adapted };
 
@@ -101,7 +112,7 @@ export class MetadataService {
    * Performs explicit manual metadata refresh.
    * Field Ownership Rule: User-managed fields (notes, tags, rawInput, title) are NEVER overwritten.
    */
-  public async refreshResourceMetadata(resource: Resource): Promise<Partial<Resource>> {
+  public async refreshResourceMetadata(userId: string, resource: Resource): Promise<Partial<Resource>> {
     const providerName = resource.providerMetadata?.provider || resource.provider;
     const providerId = resource.providerMetadata?.providerId || resource.providerId;
 
@@ -110,11 +121,17 @@ export class MetadataService {
     }
 
     const provider = providerManager.getProvider(providerName);
-    if (!provider.isConfigured()) {
-      throw AppError.unconfiguredProvider(provider.displayName);
+    
+    // Get the key if provider requires credentials
+    let apiKey: string | null = null;
+    if (provider.capabilities.supportsCredentials) {
+      apiKey = await credentialService.getCredential(userId, providerName);
+      if (!apiKey) {
+        throw AppError.unconfiguredProvider(provider.displayName);
+      }
     }
 
-    const details = await provider.getDetailsNormalized(providerId);
+    const details = await provider.getDetailsNormalized(providerId, apiKey || undefined);
     const now = Date.now();
     const adapted = adaptRawMetadata(providerName, details.metadata);
 
@@ -156,3 +173,4 @@ export class MetadataService {
 }
 
 export const metadataService = new MetadataService();
+

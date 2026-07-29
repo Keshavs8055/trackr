@@ -70,18 +70,22 @@ export const ResourceCard = React.memo(function ResourceCard({ resource, index, 
             {/* Clean space-separated hashtag list */}
             <div className="flex flex-wrap py-2">
               {resource.tags && resource.tags.length > 0 && (
-                resource.tags.map((tag, idx) => (
-                  <button
-                    key={`${resource.id}-tag-${tag}-${idx}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleTagAction(tag);
-                    }}
-                    className="text-xs font-semibold text-muted-foreground/80 hover:text-primary transition-colors py-1 px-1 -my-1 rounded-sm"
-                  >
-                    #{tag}
-                  </button>
-                ))
+                resource.tags.map((tag, idx) => {
+                  const tagStr = typeof tag === 'string' ? tag : (tag && typeof tag === 'object' && 'name' in tag ? (tag as any).name : String(tag || ''));
+                  if (!tagStr) return null;
+                  return (
+                    <button
+                      key={`${resource.id}-tag-${tagStr}-${idx}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleTagAction(tagStr);
+                      }}
+                      className="text-xs font-semibold text-muted-foreground/80 hover:text-primary transition-colors py-1 px-1 -my-1 rounded-sm"
+                    >
+                      #{tagStr}
+                    </button>
+                  );
+                })
               )}
             </div>
           </div>

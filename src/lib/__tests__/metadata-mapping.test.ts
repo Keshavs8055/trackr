@@ -18,7 +18,7 @@ async function runMetadataMappingTests() {
     updatedAt: 1000000,
   };
 
-  const updates = await metadataService.refreshResourceMetadata(mockResource);
+  const updates = await metadataService.refreshResourceMetadata("user-1", mockResource);
 
   // Assert user-managed fields are not present in updates
   console.assert(!('notes' in updates), "Test Failed: 'notes' should not be in metadata refresh updates");

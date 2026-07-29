@@ -136,5 +136,20 @@ Unrecognized tags default to `type = "note"`.
   - **Re-Render Optimization**: Wrapped `ResourceImagePoster` and `StatusBadge` in `React.memo`.
   - **Adapter Integration**: Integrated `OMDbAdapter`, `OpenLibraryAdapter`, and `GithubAdapter` into `MetadataService` for automatic typed domain metadata enrichment.
   - **Summary**: Documented in `CODEBASE_AUDIT_REFACTOR_SUMMARY.txt`.
-- **Phase 10 — AI Layer**: Gemini API integration (`ai-service.ts`), semantic query search, similarity recommendations, auto-tagging.
+- **[COMPLETED] Phase 9.6 — Status Tag Synchronization & Text-First Priority**:
+  - **Bidirectional Status Tag Synchronization**: Supported status hashtags (`#planto`, `#wishlist`, `#watching`, `#reading`, `#read`, `#dropped`, `#fav`, `#favorite`) sync automatically with resource status and tags.
+  - **Text-First Input Priority**: Prioritized text-based hashtag input over manual dropdowns while keeping manual status changes secondary.
+  - **Tag Filter Synonym Matching**: Tag filtering logic matches both direct `resource.tags` and status synonyms (e.g. filtering by `#wishlist` matches items with status `wishlist`).
+  - **Clean Edit Mode UI**: Refactored `ResourceDetails` edit mode to display strictly editable form options (Title & Hashtag Tags, Resource Type, Secondary Status Dropdown, Notes, and URL Link if applicable) without background clutter.
+- **[COMPLETED] Phase 10 — Content-First AI Layer & Intelligence Engine**:
+  - **Content-First Philosophy**: AI acts as a secondary on-demand assistant without occupying default screen real estate or generating low-value restatements of existing metadata/notes.
+  - **On-Demand AI Actions Menu (`AIActionPopover`)**: Single dropdown menu (`Sparkles` icon) in the `ResourceDetails` header toolbar exposing Auto-Tag, Find Similar in Archive, Clean & Normalize Tags, and Enhance Metadata.
+  - **On-Demand Dismissible Modals**: AI results render in dedicated dismissible dialogs (`AutoTagModal`, `SimilarResourcesModal`) only upon explicit user invocation.
+  - **Taxonomy Reuse & Tag Freedom**: Auto-tagging receives current workspace tag taxonomy to group synonyms and reuse existing tags without artificial tag count limits. User-created tags are strictly preserved.
+  - **Archive-Only Similarity Analysis**: Similarity analysis evaluates items strictly within the user's local archive.
+  - **Token Efficiency & Bulk Safeguards**: Sends minimum context per request, provides token usage warnings for bulk actions, and enforces atomic updates with 100% data rollback safety on failure.
+- **[COMPLETED] Phase 9.5/10 Verification — BYOK Provider Integration & Key Flow**:
+  - **Decrypted Credential Dynamic Retrieval**: Modified provider interface and managers (`BaseProvider`, `OMDbProvider`, `SearchService`, `MetadataService`, `ProviderService`) to accept dynamic decrypted `apiKey` parameters. Credentials are loaded dynamically via `CredentialService` on a per-request basis, adhering to strict BYOK memory isolation.
+  - **Quick Add Rich Metadata Enrichment**: Enabled `MetadataService.fetchMetadataForCreation` during selection of a provider search result. The system fetches and persists full, structured provider metadata in Firestore, maintaining minimum fetch caching.
+  - **Robust Error Handling**: Added a custom `saveError` block inside `QuickAdd` command drawer, capturing and presenting detailed user messages if credential validation, metadata retrieval, or resource creation fails.
 - **Phase 11 — Scalability & Extension Architecture**: Virtualized feeds (`@tanstack/react-virtual`), IndexedDB caching, and dynamic plugin adapter registry.

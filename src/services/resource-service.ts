@@ -15,6 +15,8 @@ import { AppError } from '@/lib/app-error';
 import { ResourceFactory } from '@/domain/resource/resource-factory';
 import { SearchIndexBuilder } from '@/domain/search/search-index-builder';
 import { EventBus } from '@/domain/events/event-bus';
+import { extractStatusFromTags } from '@/lib/parser';
+import { getDefaultStatusForType } from '@/domain/status/status-lifecycles';
 
 const DEFAULT_MOCK_RESOURCES: Resource[] = [
   {
@@ -166,10 +168,15 @@ export class ResourceService {
       providerUpdatedAt: resourceInput.providerUpdatedAt,
     };
 
+    const resType = resourceInput.type || RESOURCE_TYPES.NOTE;
+    const derivedStatus = extractStatusFromTags(resourceInput.tags || [], resType);
+    const finalStatus = resourceInput.status || derivedStatus || getDefaultStatusForType(resType);
+
     const newResourceData: Omit<Resource, 'id'> = {
       ...resourceInput,
       userId,
-      type: resourceInput.type || RESOURCE_TYPES.NOTE,
+      type: resType,
+      status: finalStatus,
       createdAt: now,
       updatedAt: now,
       providerMetadata,
@@ -210,6 +217,7 @@ export class ResourceService {
     // Recursively strip undefined values to ensure Firestore compatibility
     const cleanFirestoreData = (obj: any): any => {
       if (obj === null || typeof obj !== 'object') return obj;
+      if ('_methodName' in obj || obj.constructor?.name === 'FieldValue') return obj;
       if (Array.isArray(obj)) return obj.map(cleanFirestoreData);
       const cleaned: Record<string, any> = {};
       for (const [key, value] of Object.entries(obj)) {
@@ -242,6 +250,13 @@ export class ResourceService {
     if (!userId) throw AppError.authRequired();
 
     const cleanUpdate: Record<string, unknown> = { ...update, updatedAt: Date.now() };
+
+    if (update.tags && !update.status) {
+      const derivedStatus = extractStatusFromTags(update.tags, update.type);
+      if (derivedStatus) {
+        cleanUpdate.status = derivedStatus;
+      }
+    }
 
     // Sync providerMetadata if legacy metadata or provider is passed
     if (cleanUpdate.providerMetadata) {
@@ -292,6 +307,7 @@ export class ResourceService {
 
     const cleanFirestoreData = (obj: any): any => {
       if (obj === null || typeof obj !== 'object') return obj;
+      if ('_methodName' in obj || obj.constructor?.name === 'FieldValue') return obj;
       if (Array.isArray(obj)) return obj.map(cleanFirestoreData);
       const cleaned: Record<string, any> = {};
       for (const [key, value] of Object.entries(obj)) {
@@ -357,20 +373,20 @@ export class ResourceService {
     return {
       id,
       userId,
-      title: data.title || 'Untitled Resource',
-      type: (data.type as ResourceType) || RESOURCE_TYPES.NOTE,
-      status: data.status || undefined,
-      notes: data.notes || undefined,
-      tags: Array.isArray(data.tags) ? data.tags : [],
-      image: data.image || undefined,
-      rawInput: data.rawInput || undefined,
-      createdAt: data.createdAt || Date.now(),
-      updatedAt: data.updatedAt || Date.now(),
+      title: typeof data.title === 'string' ? data.title : 'Untitled Resource',
+      type: typeof data.type === 'string' ? (data.type as ResourceType) : RESOURCE_TYPES.NOTE,
+      status: typeof data.status === 'string' ? data.status : undefined,
+      notes: typeof data.notes === 'string' ? data.notes : undefined,
+      tags: Array.isArray(data.tags) ? data.tags.filter((t: any) => typeof t === 'string') : [],
+      image: typeof data.image === 'string' ? data.image : undefined,
+      rawInput: typeof data.rawInput === 'string' ? data.rawInput : undefined,
+      createdAt: typeof data.createdAt === 'number' ? data.createdAt : Date.now(),
+      updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : Date.now(),
       providerMetadata,
       // Legacy top-level accessors for backward compatibility
       provider,
-      providerId,
-      metadata,
+      providerId: typeof providerId === 'string' ? providerId : undefined,
+      metadata: typeof metadata === 'object' && metadata !== null ? metadata : {},
       metadataVersion,
       metadataSource,
       lastSynced,

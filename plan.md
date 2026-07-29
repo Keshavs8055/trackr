@@ -22,8 +22,9 @@ This plan details the transition from initial provider infrastructure into a fea
 - [x] **Pre-Phase 9 Audit — Tag Normalization & Link Integration**: Reserved Tag Normalization (`normalizeTag`), Plan-To Tag Simplification (`#planto`), Automatic Link Detection (`extractUrl`), and First-Class Link UI Components.
 - [x] **Phase 9 — Resource Relationships**: Knowledge Graph & Bi-directional Links (`ResourceRelationship`, `RelationshipService`, `use-relationships.ts`, `RelationshipSelectorModal`, `RelationshipGraphCard`)
 - [x] **Phase 9.5 — Provider Platform & Secure Credentials (BYOK Security Hardening)**: Production BYOK Infrastructure, Web Crypto AES-GCM 256-bit Credential Engine (`CredentialService`), IndexedDB Vault Storage (`secureStorage`), Cryptographic Device Master Keys (`enc:v2:`), SHA-256 Fingerprint Integrity Verification, Single Source of Truth for Provider Enable/Disable in Vault Records (`schemaVersion: 2`), Credential Rotation, Inactivity & Session Memory Cache Clearing, Periodic Revalidation, Provider Capability Matrix & Health Metrics (`ProviderHealth`, `ProviderManager`), Connection Diagnostics, and AI Abstraction Stubs (`BaseAIProvider`, `GeminiProvider`).
+- [x] **Phase 9.6 — Status Tag Synchronization & Text-First Priority**: Bidirectional status hashtag mapping (`#planto`, `#wishlist`, `#watching`, `#reading`, `#read`, `#dropped`, `#fav`, `#favorite`), text-first input priority over secondary status dropdowns, tag filter synonym matching, and clean edit mode UI in `ResourceDetails`.
 - [x] **Codebase Audit & Refactor Pass**: Elimination of dead/unused code (`loading-state`, `empty-state`, `input.tsx`), component deduplication (`ConnectionStatus`), React memoization optimizations (`ResourceImagePoster`, `StatusBadge`), Domain Adapter integration (`MetadataService`), and code quality standardization.
-- [ ] **Phase 10 — AI Layer**: Semantic Search, Recommendations, Smart Tags & Summaries 👈 **[CURRENT ACTIVE PHASE]**
+- [x] **Phase 10 — Content-First AI Layer & Intelligence Engine**: On-demand AI header menu (`AIActionPopover`), Auto-Tagging with archive taxonomy reuse & user tag freedom (`AutoTagModal`), internal archive similarity search (`SimilarResourcesModal`), natural language archive search (`AICommandModal`), BYOK security, token efficiency warnings, and complete removal of low-value inline summary widgets.
 - [ ] **Phase 11 — Scalability, Virtualization & Extension Architecture**: Virtualized Feeds, IndexedDB Caching, Plugin Adapter Architecture
 
 ---
@@ -206,7 +207,8 @@ Build the Resource Relationship system to connect resources into a knowledge gra
 
 ---
 
-### Milestone 9: Phase 10 — AI Layer & Intelligence Engine
+### Milestone 9: [/] Phase 10 — AI Layer & Intelligence Engine (In Progress / Testing Pending)
+
 
 #### Goal
 Integrate an AI service layer (Gemini API) to provide semantic search, similarity recommendations, automatic tag generation, note summarization, and natural language queries.
@@ -230,6 +232,11 @@ Implement the AI Layer in `src/services/ai-service.ts` and UI tools using the Ge
    - `ai-command-modal.tsx`: Interactive AI prompt modal (cmd+k / ai button) for natural language queries and insights.
    - `similar-resources-card.tsx`: Display "Recommended / Similar items in your archive" card inside resource details.
 ```
+
+- **[COMPLETED] BYOK Provider Integration & Key Flow Verification**:
+  - Dynamically resolved and passed credentials from secure client-side IndexedDB vaults on the fly to external providers (OMDb, OpenLibrary) for both search and detail-enrichment fetches.
+  - Implemented full metadata retrieval and database persistence during Quick Add provider matching.
+  - Integrated custom error handling and UI notifications block inside the command drawer if metadata enrichment fails.
 
 ---
 

@@ -23,11 +23,22 @@ export class OMDbProvider extends BaseProvider {
     supportsCredentials: true,
   };
 
+  private apiKey: string | null = null;
+
   constructor() {
     super({ rateLimitPerMin: 60, maxRetries: 3 });
   }
 
-  public async validateCredentials(credentials: Record<string, string>): Promise<boolean> {
+  public override setApiKey(key: string | null): void {
+    this.apiKey = key;
+    this.setConfigured(!!key);
+  }
+
+  public override getApiKey(): string | null {
+    return this.apiKey;
+  }
+
+  public override async validateCredentials(credentials: Record<string, string>): Promise<boolean> {
     const key = credentials.apiKey || credentials.key;
     if (!key || key.trim() === '') return false;
 
@@ -43,6 +54,7 @@ export class OMDbProvider extends BaseProvider {
       return false;
     }
   }
+
 
   public async searchNormalizedWithKey(queryStr: string, apiKey: string, page: number = 1): Promise<PaginatedSearchResults> {
     if (!apiKey || apiKey.trim() === '') {
@@ -111,4 +123,46 @@ export class OMDbProvider extends BaseProvider {
       };
     });
   }
+
+  public override async searchNormalized(queryStr: string, page: number = 1, apiKey?: string): Promise<PaginatedSearchResults> {
+    const key = apiKey || this.getApiKey();
+    if (!key) {
+      throw AppError.unconfiguredProvider(this.displayName);
+    }
+    return this.searchNormalizedWithKey(queryStr, key, page);
+  }
+
+  public override async getDetailsNormalized(providerId: string, apiKey?: string): Promise<{
+    title: string;
+    image?: string;
+    metadata: Record<string, unknown>;
+  }> {
+    const key = apiKey || this.getApiKey();
+    if (!key) {
+      throw AppError.unconfiguredProvider(this.displayName);
+    }
+
+    return this.executeWithRetry(async () => {
+      const url = `https://www.omdbapi.com/?apikey=${encodeURIComponent(key.trim())}&i=${encodeURIComponent(providerId)}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw AppError.networkError(this.displayName);
+      }
+
+      const data = await res.json();
+      if (data.Response === 'False') {
+        if (data.Error === 'Invalid API key!') {
+          throw AppError.invalidApiKey(this.displayName);
+        }
+        throw AppError.notFound(`Movie (${providerId})`);
+      }
+
+      return {
+        title: data.Title || 'Untitled Movie',
+        image: data.Poster && data.Poster !== 'N/A' ? data.Poster : undefined,
+        metadata: data,
+      };
+    });
+  }
 }
+

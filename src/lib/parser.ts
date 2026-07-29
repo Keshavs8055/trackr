@@ -59,34 +59,89 @@ export const TAG_NORMALIZATION_MAP: Record<string, string> = {
   notes: 'note',
 
   // "Plan to" Canonical Tag Mapping
-  plantowatch: 'planto',
-  plantoread: 'planto',
-  plantocheck: 'planto',
-  plantolisten: 'planto',
-  plantodo: 'planto',
-  'plan-to-watch': 'planto',
-  'plan-to-read': 'planto',
-  'plan-to-check': 'planto',
-  'plan-to-listen': 'planto',
-  'plan-to-do': 'planto',
+  plantowatch: 'plantowatch',
+  plantoread: 'plantoread',
+  plantocheck: 'plantocheck',
+  plantolisten: 'plantolisten',
+  plantodo: 'plantodo',
+  'plan-to-watch': 'plantowatch',
+  'plan-to-read': 'plantoread',
+  'plan-to-check': 'plantocheck',
+  'plan-to-listen': 'plantolisten',
+  'plan-to-do': 'plantodo',
   planto: 'planto',
+  wishlist: 'wishlist',
+  'wish-list': 'wishlist',
 
-  // Lifecycle Status Tag Normalization -> Canonical Tags
-  watched: 'completed',
+  // Lifecycle Status Tag Normalization -> Preserved Canonical Tags
+  watched: 'watched',
   completed: 'completed',
   over: 'completed',
   finished: 'completed',
-  read: 'completed',
+  read: 'read',
   done: 'completed',
+  dropped: 'dropped',
+  fav: 'fav',
+  favorite: 'fav',
 
-  currentlyreading: 'in-progress',
-  currentlywatching: 'in-progress',
-  reading: 'in-progress',
-  watching: 'in-progress',
-  'currently-reading': 'in-progress',
-  'currently-watching': 'in-progress',
+  currentlyreading: 'reading',
+  currentlywatching: 'watching',
+  reading: 'reading',
+  watching: 'watching',
+  'currently-reading': 'reading',
+  'currently-watching': 'watching',
   'in-progress': 'in-progress',
 };
+
+/**
+ * Extracts the derived status from tags for a resource type.
+ */
+export function extractStatusFromTags(tags: string[], resourceType?: string): string | null {
+  if (!tags || tags.length === 0) return null;
+  const cleanTags = tags.map(t => t.toLowerCase().replace(/^#/, ''));
+
+  for (const tag of cleanTags) {
+    if (tag === 'wishlist' || tag === 'wish-list') return 'wishlist';
+    if (['planto', 'plantoread', 'plantowatch', 'plantocheck', 'planned', 'plan-to-read', 'plan-to-watch', 'backlog'].includes(tag)) {
+      if (resourceType === 'movie' || resourceType === 'tv' || resourceType === 'book') return 'planned';
+      return 'backlog';
+    }
+    if (['watching', 'currentlywatching', 'currently-watching'].includes(tag)) return 'watching';
+    if (['reading', 'currentlyreading', 'currently-reading'].includes(tag)) return 'reading';
+    if (['read', 'watched', 'completed', 'finished', 'done', 'over'].includes(tag)) return 'completed';
+    if (tag === 'dropped') return 'dropped';
+    if (tag === 'archived') return 'archived';
+  }
+  return null;
+}
+
+/**
+ * Returns tag synonyms matching a given status string.
+ */
+export function getStatusSynonymTags(status?: string): string[] {
+  if (!status) return [];
+  const s = status.toLowerCase();
+  switch (s) {
+    case 'wishlist':
+      return ['wishlist', 'wish-list'];
+    case 'planned':
+    case 'planto':
+    case 'backlog':
+      return ['planto', 'plantowatch', 'plantoread', 'plantocheck', 'planned', 'backlog'];
+    case 'watching':
+      return ['watching', 'currentlywatching', 'in-progress'];
+    case 'reading':
+      return ['reading', 'currentlyreading', 'in-progress'];
+    case 'completed':
+      return ['completed', 'read', 'watched', 'finished', 'done'];
+    case 'dropped':
+      return ['dropped'];
+    case 'archived':
+      return ['archived'];
+    default:
+      return [s];
+  }
+}
 
 /**
  * Normalizes a tag string into its canonical representation.

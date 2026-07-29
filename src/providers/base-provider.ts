@@ -48,26 +48,27 @@ export abstract class BaseProvider {
     return false;
   }
 
-  public async searchNormalized(query: string, page: number = 1): Promise<PaginatedSearchResults> {
+  public async searchNormalized(query: string, page: number = 1, apiKey?: string): Promise<PaginatedSearchResults> {
     if (!this.capabilities.supportsSearch) {
       return { results: [], page: 1, pageSize: 10, hasMore: false, totalResults: 0 };
     }
-    if (!this.isConfigured()) {
+    if (!this.isConfigured() && !apiKey) {
       throw AppError.unconfiguredProvider(this.displayName);
     }
     return { results: [], page: 1, pageSize: 10, hasMore: false, totalResults: 0 };
   }
 
-  public async getDetailsNormalized(providerId: string): Promise<{
+  public async getDetailsNormalized(providerId: string, apiKey?: string): Promise<{
     title: string;
     image?: string;
     metadata: Record<string, unknown>;
   }> {
-    if (!this.isConfigured()) {
+    if (!this.isConfigured() && !apiKey) {
       throw AppError.unconfiguredProvider(this.displayName);
     }
     throw AppError.notFound(this.displayName);
   }
+
 
   protected async checkRateLimit(): Promise<void> {
     const minInterval = (60 * 1000) / (this.config.rateLimitPerMin || 60);

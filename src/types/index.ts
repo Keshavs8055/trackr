@@ -310,3 +310,63 @@ export interface ResourceRelationship {
   notes?: string;
   createdAt: number;
 }
+
+// --- AI Layer & Intelligence Engine Interfaces ---
+
+export interface AISettings {
+  selectedModel: string;
+  temperature: number;
+  maxOutputTokens: number;
+  contextSize: number;
+  enableStreaming: boolean;
+}
+
+export interface NLQueryResult {
+  intent: string;
+  confidence: number; // 0.0 to 1.0
+  reasoning: string;
+  matchingResourceIds: string[];
+  answer: string;
+  suggestedFilters?: {
+    types?: ResourceType[];
+    tags?: string[];
+    status?: string[];
+    searchQuery?: string;
+  };
+}
+
+export interface AISuggestion {
+  resourceId: string;
+  title: string;
+  type: ResourceType;
+  reason: string;
+  matchScore: number; // 0 to 100
+}
+
+export interface AIDuplicateGroup {
+  primaryResourceId: string;
+  duplicateResourceIds: string[];
+  confidence: number;
+  reason: string;
+}
+
+export interface AIMetadataCleanupResult {
+  resourceId: string;
+  suggestedTitle?: string;
+  suggestedTagsToAdd?: string[];
+  suggestedTagsToRemove?: string[];
+  notesCorrection?: string;
+  cleanedFields?: Record<string, unknown>;
+}
+
+export interface AICacheEntry<T = unknown> {
+  id: string;
+  key: string; // Hashed lookup key e.g. "summary:res_123:ts_1722270000"
+  type: 'summary' | 'autoTags' | 'similarity' | 'nlQuery' | 'smartCollection' | 'cleanup' | 'duplicates';
+  targetId?: string; // Resource ID or context ID
+  data: T;
+  resourceUpdatedAtHash?: number; // Target resource's updatedAt timestamp
+  createdAt: number;
+  expiresAt?: number;
+}
+

@@ -16,6 +16,8 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ArchivePortabilityModal } from "@/components/settings/archive-portability-modal";
 
+import { AISettingsTab } from "@/components/settings/ai-settings-tab";
+
 export function IntegrationsDrawer() {
   const { integrationsOpen, setIntegrationsOpen } = useAppStore();
   const { data: integrations, isLoading } = useIntegrations();
@@ -25,6 +27,7 @@ export function IntegrationsDrawer() {
   const { mutateAsync: disconnectProvider, isPending: isDisconnecting } = useDisconnectProvider();
   const { mutateAsync: testConnection, isPending: isTesting } = useTestProviderConnection();
 
+  const [activeTab, setActiveTab] = useState<'providers' | 'ai_settings'>('providers');
   const [isPortabilityModalOpen, setIsPortabilityModalOpen] = useState(false);
   const [configuringProviderId, setConfiguringProviderId] = useState<string | null>(null);
   const [testingProviderId, setTestingProviderId] = useState<string | null>(null);
@@ -33,6 +36,7 @@ export function IntegrationsDrawer() {
   const [notification, setNotification] = useState<string | null>(null);
 
   const [disconnectTargetId, setDisconnectTargetId] = useState<string | null>(null);
+
 
   const handleSaveKey = async (providerId: string) => {
     if (!apiKeyInput.trim() || isConfiguring) return;
@@ -111,12 +115,30 @@ export function IntegrationsDrawer() {
               className="relative z-10 w-full max-w-lg bg-card rounded-t-2xl md:rounded-2xl border border-border shadow-lg flex flex-col max-h-[85vh] overflow-hidden gpu-accelerated"
             >
               {/* Header */}
-              <div className="px-5 py-4 flex items-center justify-between border-b border-border/30">
-                <div className="flex items-center gap-2">
-                  <SlidersHorizontal className="size-4 text-primary" />
-                  <h2 className="text-sm font-semibold text-foreground tracking-tight">
-                    Providers & Secure Credentials
-                  </h2>
+              <div className="px-5 py-3.5 flex items-center justify-between border-b border-border/30">
+                <div className="flex items-center gap-1.5 p-1 rounded-lg bg-secondary/50 border border-border/40">
+                  <button
+                    onClick={() => setActiveTab('providers')}
+                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                      activeTab === 'providers'
+                        ? 'bg-background text-foreground shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <SlidersHorizontal className="size-3.5" />
+                    <span>Providers & Keys</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('ai_settings')}
+                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                      activeTab === 'ai_settings'
+                        ? 'bg-background text-foreground shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Sparkles className="size-3.5 text-purple-400" />
+                    <span>AI Settings</span>
+                  </button>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -138,15 +160,20 @@ export function IntegrationsDrawer() {
 
               {/* Body */}
               <div className="p-5 overflow-y-auto space-y-4 flex-1">
-                <div className="p-3.5 rounded-xl bg-primary/5 border border-primary/20 text-xs text-muted-foreground space-y-1">
-                  <div className="flex items-center gap-1.5 font-bold text-foreground">
-                    <KeyRound className="size-3.5 text-primary" />
-                    <span>Bring Your Own Key (BYOK) Architecture</span>
-                  </div>
-                  <p className="leading-relaxed text-[11px]">
-                    Trackr encrypts API keys at rest using client-side Web Crypto AES-GCM 256-bit. Credentials are never logged, sent to Firestore, or shared.
-                  </p>
-                </div>
+                {activeTab === 'ai_settings' ? (
+                  <AISettingsTab />
+                ) : (
+                  <>
+                    <div className="p-3.5 rounded-xl bg-primary/5 border border-primary/20 text-xs text-muted-foreground space-y-1">
+                      <div className="flex items-center gap-1.5 font-bold text-foreground">
+                        <KeyRound className="size-3.5 text-primary" />
+                        <span>Bring Your Own Key (BYOK) Architecture</span>
+                      </div>
+                      <p className="leading-relaxed text-[11px]">
+                        Trackr encrypts API keys at rest using client-side Web Crypto AES-GCM 256-bit. Credentials are never logged, sent to Firestore, or shared.
+                      </p>
+                    </div>
+
 
                 {notification && (
                   <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs font-medium flex items-center gap-2">
@@ -320,6 +347,8 @@ export function IntegrationsDrawer() {
                       </div>
                     ))}
                   </div>
+                )}
+                  </>
                 )}
               </div>
 

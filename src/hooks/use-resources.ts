@@ -93,7 +93,14 @@ export function useUpdateResource() {
       if (previousResources && user?.uid) {
         queryClient.setQueryData<Resource[]>(
           ['resources', user.uid],
-          previousResources.map((res) => (res.id === id ? { ...res, ...update, updatedAt: Date.now() } : res))
+          previousResources.map((res) => {
+            if (res.id === id) {
+              const updatedRes = { ...res, ...update, updatedAt: Date.now() };
+              if (update.notes === undefined) delete updatedRes.notes;
+              return updatedRes;
+            }
+            return res;
+          })
         );
       }
 
@@ -143,6 +150,8 @@ export function useDeleteResource() {
   });
 }
 
+import { getStatusSynonymTags, normalizeTag } from '@/lib/parser';
+
 export function useUserTags() {
   const { data: resources } = useResources();
   
@@ -151,7 +160,11 @@ export function useUserTags() {
     
     const tagSet = new Set<string>();
     resources.forEach((res) => {
-      res.tags?.forEach((tag) => tagSet.add(tag));
+      res.tags?.forEach((tag) => tagSet.add(normalizeTag(tag)));
+      if (res.status) {
+        const synonyms = getStatusSynonymTags(res.status);
+        if (synonyms.length > 0) tagSet.add(normalizeTag(synonyms[0]));
+      }
     });
     
     return Array.from(tagSet).sort();
@@ -166,7 +179,11 @@ export function useFacetedTags(selectedTags: string[]) {
     
     const globalTagSet = new Set<string>();
     resources.forEach((res) => {
-      res.tags?.forEach((tag) => globalTagSet.add(tag));
+      res.tags?.forEach((tag) => globalTagSet.add(normalizeTag(tag)));
+      if (res.status) {
+        const synonyms = getStatusSynonymTags(res.status);
+        if (synonyms.length > 0) globalTagSet.add(normalizeTag(synonyms[0]));
+      }
     });
     
     if (selectedTags.length === 0) {
@@ -174,15 +191,25 @@ export function useFacetedTags(selectedTags: string[]) {
     }
     
     const matchingResources = resources.filter((res) => 
-      selectedTags.every((t) => res.tags?.includes(t))
+      selectedTags.every((selectedTag) => {
+        const normSelected = normalizeTag(selectedTag);
+        const hasDirectTag = res.tags?.some((t) => normalizeTag(t) === normSelected);
+        if (hasDirectTag) return true;
+        const statusSynonyms = getStatusSynonymTags(res.status);
+        return statusSynonyms.some((syn) => normalizeTag(syn) === normSelected);
+      })
     );
     
     const facetedTagSet = new Set<string>();
     matchingResources.forEach((res) => {
-      res.tags?.forEach((tag) => facetedTagSet.add(tag));
+      res.tags?.forEach((tag) => facetedTagSet.add(normalizeTag(tag)));
+      if (res.status) {
+        const synonyms = getStatusSynonymTags(res.status);
+        if (synonyms.length > 0) facetedTagSet.add(normalizeTag(synonyms[0]));
+      }
     });
     
-    selectedTags.forEach((tag) => facetedTagSet.add(tag));
+    selectedTags.forEach((tag) => facetedTagSet.add(normalizeTag(tag)));
     
     return Array.from(facetedTagSet).sort();
   }, [resources, selectedTags]);

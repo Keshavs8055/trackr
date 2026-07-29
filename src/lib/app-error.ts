@@ -12,7 +12,10 @@ export type ErrorCategory =
   | 'SERVER_ERROR'
   | 'TIMEOUT'
   | 'AI_NOT_IMPLEMENTED'
+  | 'BYOK_KEY_REQUIRED'
+  | 'AI_EXECUTION_FAILED'
   | 'UNKNOWN_ERROR';
+
 
 export class AppError extends Error {
   public readonly code: ErrorCategory;

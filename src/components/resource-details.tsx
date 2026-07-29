@@ -14,12 +14,18 @@ import { WebsiteDetailsCard } from "./resources/website-details-card";
 import { X, Check, Loader2, RefreshCw, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
-import { extractTags, cleanTitle } from "@/lib/parser";
+import { extractTags, cleanTitle, extractStatusFromTags } from "@/lib/parser";
+import { getStatusesForType } from "@/domain/status/status-lifecycles";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { StatusBadge } from "./resources/status-badge";
 import { ActivityTimeline } from "./activity/activity-timeline";
 import { ResourceNotesTab } from "./notes/resource-notes-tab";
 import { RelationshipGraphCard } from "./relationships/relationship-graph-card";
+import { AIActionPopover } from "./ai/ai-action-popover";
+import { AutoTagModal } from "./ai/auto-tag-modal";
+import { SimilarResourcesModal } from "./ai/similar-resources-card";
+import { useResources, useUserTags } from "@/hooks/use-resources";
+
 
 interface ResourceDetailsProps {
   resource: Resource | null;
@@ -31,19 +37,43 @@ export function ResourceDetails({ resource, isOpen, onClose }: ResourceDetailsPr
   const { mutateAsync: updateResource, isPending: isUpdating } = useUpdateResource();
   const { mutateAsync: deleteResource, isPending: isDeleting } = useDeleteResource();
   const { mutateAsync: refreshMetadata, isPending: isRefreshing } = useMetadataRefresh();
+  const { data: allResources } = useResources();
+  const allTags = useUserTags();
 
   const [activeResource, setActiveResource] = useState<Resource | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [notesValue, setNotesValue] = useState("");
+  const [urlValue, setUrlValue] = useState("");
+  const [statusValue, setStatusValue] = useState("");
   const [typeValue, setTypeValue] = useState<ResourceType>(RESOURCE_TYPES.NOTE);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [isAutoTagOpen, setIsAutoTagOpen] = useState(false);
+  const [isSimilarModalOpen, setIsSimilarModalOpen] = useState(false);
   const editInputRef = useRef<HTMLInputElement>(null);
+
+  const sanitizeResource = (res: Resource | null): Resource | null => {
+    if (!res) return null;
+    return {
+      ...res,
+      title: typeof res.title === 'string' ? res.title : String(res.title || 'Untitled Resource'),
+      notes: typeof res.notes === 'string' ? res.notes : undefined,
+      url: typeof res.url === 'string' ? res.url : undefined,
+      status: typeof res.status === 'string' ? res.status : undefined,
+      type: typeof res.type === 'string' ? res.type : RESOURCE_TYPES.NOTE,
+      image: typeof res.image === 'string' ? res.image : undefined,
+      tags: Array.isArray(res.tags)
+        ? res.tags
+            .filter(t => typeof t === 'string' || (t && typeof t === 'object' && 'name' in t))
+            .map(t => (typeof t === 'string' ? t : (t as any).name || String(t)))
+        : [],
+    };
+  };
 
   useEffect(() => {
     if (resource) {
-      setActiveResource(resource);
+      setActiveResource(sanitizeResource(resource));
     }
   }, [resource]);
 
@@ -52,6 +82,8 @@ export function ResourceDetails({ resource, isOpen, onClose }: ResourceDetailsPr
       const tagsStr = activeResource.tags ? activeResource.tags.map(t => `#${t}`).join(" ") : "";
       setEditValue(`${activeResource.title} ${tagsStr}`.trim());
       setNotesValue(activeResource.notes || "");
+      setUrlValue(activeResource.url || "");
+      setStatusValue(activeResource.status || "");
       setTypeValue(activeResource.type || RESOURCE_TYPES.NOTE);
       setIsEditing(false);
       setIsConfirmingDelete(false);
@@ -73,29 +105,43 @@ export function ResourceDetails({ resource, isOpen, onClose }: ResourceDetailsPr
     }
   };
 
+  const handleEditValueChange = (val: string) => {
+    setEditValue(val);
+    const tags = extractTags(val);
+    const derived = extractStatusFromTags(tags, typeValue);
+    if (derived) {
+      setStatusValue(derived);
+    }
+  };
+
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!editValue.trim() || isUpdating || !activeResource) return;
 
     const formattedTags = extractTags(editValue);
     const title = cleanTitle(editValue);
+    const derivedStatus = extractStatusFromTags(formattedTags, typeValue) || statusValue;
 
     try {
       await updateResource({
         id: activeResource.id,
         title,
         type: typeValue,
+        status: derivedStatus,
         tags: formattedTags,
         rawInput: editValue,
-        notes: notesValue.trim() || undefined
+        notes: notesValue.trim() || undefined,
+        url: urlValue.trim() || undefined,
       });
       setActiveResource(prev => prev ? {
         ...prev,
         title,
         type: typeValue,
+        status: derivedStatus,
         tags: formattedTags,
         rawInput: editValue,
-        notes: notesValue.trim() || undefined
+        notes: notesValue.trim() || undefined,
+        url: urlValue.trim() || undefined,
       } : null);
       setIsEditing(false);
     } catch (err) {
@@ -112,6 +158,34 @@ export function ResourceDetails({ resource, isOpen, onClose }: ResourceDetailsPr
     } catch (err: any) {
       setActionError(err?.userMessage || "Failed to refresh metadata.");
       setTimeout(() => setActionError(null), 3500);
+    }
+  };
+
+  const handleApplyAutoTags = async (newTags: string[]) => {
+    if (!activeResource) return;
+    try {
+      await updateResource({
+        id: activeResource.id,
+        tags: newTags,
+      });
+      setActiveResource((prev) => (prev ? { ...prev, tags: newTags } : null));
+    } catch (err) {
+      console.error("Failed to apply auto-tags:", err);
+    }
+  };
+
+  const handleCleanMetadataAction = async () => {
+    if (!activeResource) return;
+    try {
+      const cleanTags = (activeResource.tags || []).map((t) => t.trim().toLowerCase());
+      const uniqueTags = Array.from(new Set(cleanTags));
+      await updateResource({
+        id: activeResource.id,
+        tags: uniqueTags,
+      });
+      setActiveResource((prev) => (prev ? { ...prev, tags: uniqueTags } : null));
+    } catch (err) {
+      console.error("Failed to clean metadata tags:", err);
     }
   };
 
@@ -157,13 +231,24 @@ export function ResourceDetails({ resource, isOpen, onClose }: ResourceDetailsPr
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                 {isEditing ? "Edit resource" : "Resource detail"}
               </h2>
-              <button 
-                onClick={onClose}
-                className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-secondary active:scale-95 transition-all"
-                aria-label="Close"
-              >
-                <X className="size-4 text-muted-foreground" />
-              </button>
+              <div className="flex items-center gap-2">
+                {!isEditing && (
+                  <AIActionPopover
+                    onAutoTag={() => setIsAutoTagOpen(true)}
+                    onFindSimilar={() => setIsSimilarModalOpen(true)}
+                    onCleanMetadata={handleCleanMetadataAction}
+                    onEnhanceMetadata={handleManualRefresh}
+                    isAnalyzing={isRefreshing}
+                  />
+                )}
+                <button 
+                  onClick={onClose}
+                  className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-secondary active:scale-95 transition-all"
+                  aria-label="Close"
+                >
+                  <X className="size-4 text-muted-foreground" />
+                </button>
+              </div>
             </div>
 
             <div className="p-6 overflow-y-auto space-y-5 flex-1">
@@ -178,33 +263,69 @@ export function ResourceDetails({ resource, isOpen, onClose }: ResourceDetailsPr
                 <form onSubmit={handleSave} className="space-y-4">
                   <div className="space-y-1">
                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                      Title & Tags
+                      Title & Tags (Text-First Hashtags)
                     </span>
                     <input
                       ref={editInputRef}
                       value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
-                      placeholder="e.g. Flowers for Algernon #books"
+                      onChange={(e) => handleEditValueChange(e.target.value)}
+                      placeholder="e.g. Flowers for Algernon #books #wishlist"
                       className="w-full h-11 px-3 rounded-lg bg-secondary/30 border border-border/50 focus:border-primary focus:ring-0 outline-none transition-all text-sm font-medium"
                     />
+                    <p className="text-[10px] text-muted-foreground">
+                      Tip: Tags like <code className="text-primary font-mono">#wishlist</code>, <code className="text-primary font-mono">#watching</code>, <code className="text-primary font-mono">#reading</code>, <code className="text-primary font-mono">#read</code>, <code className="text-primary font-mono">#planto</code>, <code className="text-primary font-mono">#dropped</code> automatically update status.
+                    </p>
                   </div>
 
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                      Resource Type
-                    </span>
-                    <select
-                      value={typeValue}
-                      onChange={(e) => setTypeValue(e.target.value as ResourceType)}
-                      className="w-full h-10 px-3 rounded-lg bg-secondary/30 border border-border/50 text-sm font-medium outline-none capitalize"
-                    >
-                      {Object.values(RESOURCE_TYPES).map((t) => (
-                        <option key={t} value={t} className="bg-card text-foreground">
-                          {t}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                        Resource Type
+                      </span>
+                      <select
+                        value={typeValue}
+                        onChange={(e) => setTypeValue(e.target.value as ResourceType)}
+                        className="w-full h-10 px-3 rounded-lg bg-secondary/30 border border-border/50 text-sm font-medium outline-none capitalize"
+                      >
+                        {Object.values(RESOURCE_TYPES).map((t) => (
+                          <option key={t} value={t} className="bg-card text-foreground">
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                        Status (Secondary)
+                      </span>
+                      <select
+                        value={statusValue}
+                        onChange={(e) => setStatusValue(e.target.value)}
+                        className="w-full h-10 px-3 rounded-lg bg-secondary/30 border border-border/50 text-sm font-medium outline-none capitalize"
+                      >
+                        {getStatusesForType(typeValue).map((s) => (
+                          <option key={s.value} value={s.value} className="bg-card text-foreground">
+                            {s.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
+
+                  {(activeResource.url !== undefined || typeValue === 'website' || typeValue === 'article' || typeValue === 'github') && (
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                        URL Link (Optional)
+                      </span>
+                      <input
+                        value={urlValue}
+                        onChange={(e) => setUrlValue(e.target.value)}
+                        placeholder="https://example.com"
+                        className="w-full h-10 px-3 rounded-lg bg-secondary/30 border border-border/50 focus:border-primary focus:ring-0 outline-none transition-all text-sm font-medium"
+                      />
+                    </div>
+                  )}
 
                   <div className="space-y-1">
                     <div className="flex justify-between items-center">
@@ -252,14 +373,18 @@ export function ResourceDetails({ resource, isOpen, onClose }: ResourceDetailsPr
                     
                     {activeResource.tags && activeResource.tags.length > 0 && (
                       <div className="flex flex-wrap gap-2 pt-0.5">
-                        {activeResource.tags.map((tag, idx) => (
-                          <span 
-                            key={`${activeResource.id}-tag-${tag}-${idx}`} 
-                            className="text-xs font-semibold text-muted-foreground/80"
-                          >
-                            #{tag}
-                          </span>
-                        ))}
+                        {activeResource.tags.map((tag, idx) => {
+                          const tagStr = typeof tag === 'string' ? tag : (tag && typeof tag === 'object' && 'name' in tag ? (tag as any).name : String(tag || ''));
+                          if (!tagStr) return null;
+                          return (
+                            <span 
+                              key={`${activeResource.id}-tag-${tagStr}-${idx}`} 
+                              className="text-xs font-semibold text-muted-foreground/80"
+                            >
+                              #{tagStr}
+                            </span>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -286,7 +411,7 @@ export function ResourceDetails({ resource, isOpen, onClose }: ResourceDetailsPr
                   {activeResource.type === 'github' && <GithubDetailsCard resource={activeResource} />}
                   {activeResource.type === 'website' && <WebsiteDetailsCard resource={activeResource} />}
 
-                  {activeResource.notes && (
+                  {typeof activeResource.notes === 'string' && activeResource.notes.trim() !== '' && (
                     <div className="bg-secondary/20 p-4 rounded-xl border border-border/30">
                       <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">
                         Personal Notes
@@ -297,8 +422,11 @@ export function ResourceDetails({ resource, isOpen, onClose }: ResourceDetailsPr
                     </div>
                   )}
 
+
+
                   {/* Knowledge Graph Connections */}
                   <RelationshipGraphCard resource={activeResource} onOpenResourceDetails={(r) => setActiveResource(r)} />
+
 
                   {/* Multi-Notes & Wiki-Link Engine */}
                   <ResourceNotesTab resourceId={activeResource.id} resourceTitle={activeResource.title} />
@@ -366,6 +494,28 @@ export function ResourceDetails({ resource, isOpen, onClose }: ResourceDetailsPr
         </div>
       )}
 
+      {/* On-Demand AI Auto-Tag Modal */}
+      {activeResource && (
+        <AutoTagModal
+          isOpen={isAutoTagOpen}
+          onClose={() => setIsAutoTagOpen(false)}
+          resource={activeResource}
+          existingWorkspaceTags={allTags || []}
+          onApplyTags={handleApplyAutoTags}
+        />
+      )}
+
+      {/* On-Demand AI Similar Resources Modal */}
+      {activeResource && (
+        <SimilarResourcesModal
+          isOpen={isSimilarModalOpen}
+          onClose={() => setIsSimilarModalOpen(false)}
+          resource={activeResource}
+          allResources={allResources || []}
+          onSelectResource={(r) => setActiveResource(r)}
+        />
+      )}
+
       {/* Delete Confirmation Modal */}
       <ConfirmDialog
         isOpen={isConfirmingDelete}
@@ -377,6 +527,6 @@ export function ResourceDetails({ resource, isOpen, onClose }: ResourceDetailsPr
         onConfirm={handleConfirmDelete}
         onClose={() => setIsConfirmingDelete(false)}
       />
-</div>
+    </div>
   );
 }

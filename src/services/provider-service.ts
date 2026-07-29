@@ -22,19 +22,20 @@ export class ProviderService {
   }
 
   public async search(
+    userId: string,
     type: ResourceType, 
     query: string, 
     page: number = 1
   ): Promise<{ results: PaginatedSearchResults; providerName: string }> {
-    return searchService.search(type, query, page);
+    return searchService.search(userId, type, query, page);
   }
 
-  public async fetchMetadataForCreation(providerName: string, providerId: string) {
-    return metadataService.fetchMetadataForCreation(providerName, providerId);
+  public async fetchMetadataForCreation(userId: string, providerName: string, providerId: string) {
+    return metadataService.fetchMetadataForCreation(userId, providerName, providerId);
   }
 
-  public async refreshResourceMetadata(resource: Resource): Promise<Partial<Resource>> {
-    return metadataService.refreshResourceMetadata(resource);
+  public async refreshResourceMetadata(userId: string, resource: Resource): Promise<Partial<Resource>> {
+    return metadataService.refreshResourceMetadata(userId, resource);
   }
 
   public async configureProvider(userId: string, providerName: ProviderName | string, apiKey: string) {

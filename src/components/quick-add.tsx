@@ -6,6 +6,8 @@ import { useAppStore } from "@/store/app-store";
 import { useAddResource, useUserTags } from "@/hooks/use-resources";
 import { providerManager } from "@/services/providers/provider-manager";
 import { useProviderSearch } from "@/hooks/use-provider-search";
+import { providerService } from "@/services/provider-service";
+import { useAuth } from "@/components/auth-provider";
 import { Loader2, X, Hash, CornerDownLeft, Sparkles, Globe, Link2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { HASHTAG_REGEX, formatTag, extractTags, cleanTitle, extractUrl } from "@/lib/parser";
@@ -17,7 +19,9 @@ export function QuickAdd() {
   const [isSaving, setIsSaving] = React.useState(false);
   const [isTypingTag, setIsTypingTag] = React.useState(false);
   const [searchTag, setSearchTag] = React.useState("");
+  const [saveError, setSaveError] = React.useState<string | null>(null);
   
+  const { user } = useAuth();
   const { mutateAsync: addResource } = useAddResource();
   const globalTags = useUserTags();
   
@@ -28,6 +32,7 @@ export function QuickAdd() {
       setInputValue("");
       setIsTypingTag(false);
       setSearchTag("");
+      setSaveError(null);
     }
   }, [quickAddOpen]);
 
@@ -186,26 +191,37 @@ export function QuickAdd() {
 
   const handleSelectProviderResult = async (result: SearchResult) => {
     setIsSaving(true);
+    setSaveError(null);
     const formattedTags = extractTags(inputValue);
     const tags = Array.from(new Set([...formattedTags, result.type]));
 
     try {
+      // 1. Fetch full enriched metadata for resource creation
+      const enriched = await providerService.fetchMetadataForCreation(
+        user?.uid || 'mock-user-id',
+        result.provider,
+        result.providerId
+      );
+
+      // 2. Add resource with fully enriched fields
       await addResource({
-        title: result.title,
+        title: enriched.title || result.title,
         type: result.type,
         provider: result.provider,
         providerId: result.providerId,
-        image: result.image,
+        image: enriched.image || result.image,
         tags,
-        rawInput: inputValue || result.title,
-        metadata: result.metadataPreview || {},
-        metadataVersion: 1,
-        metadataSource: { provider: String(result.provider), version: "2.0.0", schemaVersion: 1 },
+        rawInput: inputValue || enriched.title || result.title,
+        metadata: enriched.metadata || {},
+        metadataVersion: enriched.metadataVersion || 1,
+        metadataSource: enriched.metadataSource,
+        providerMetadata: enriched.providerMetadata,
       });
       setQuickAddOpen(false);
       setInputValue("");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to create resource from provider", error);
+      setSaveError(error?.userMessage || error?.message || "Failed to retrieve details from metadata provider.");
     } finally {
       setIsSaving(false);
     }
@@ -287,6 +303,20 @@ export function QuickAdd() {
                     </button>
                   )}
                 </div>
+
+                {saveError && (
+                  <div className="mx-3 my-2 p-2.5 rounded-lg bg-destructive/10 border border-destructive/20 flex items-center justify-between gap-2">
+                    <p className="text-xs text-destructive font-medium flex-1">
+                      {saveError}
+                    </p>
+                    <button
+                      onClick={() => setSaveError(null)}
+                      className="text-[10px] font-bold text-muted-foreground hover:text-foreground shrink-0 uppercase tracking-wider"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
                 
                 {detectedUrl && (
                   <div className="mx-3 my-2 p-2.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-between gap-2">
