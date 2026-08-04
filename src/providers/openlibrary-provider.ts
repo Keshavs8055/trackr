@@ -38,7 +38,11 @@ export class OpenLibraryProvider extends BaseProvider {
 
     return this.executeWithRetry(async () => {
       const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(queryStr.trim())}&page=${page}&limit=10`;
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        'headers': {
+          'User-Agent': 'Trackr ()',
+        }
+      });
       if (!res.ok) {
         throw AppError.networkError(this.displayName);
       }

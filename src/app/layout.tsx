@@ -30,6 +30,7 @@ export const metadata: Metadata = {
 };
 
 import { ErrorBoundary } from "@/components/ui/error-boundary";
+import { ToastContainer } from "@/components/ui/toast-container";
 
 export default function RootLayout({
   children,
@@ -51,6 +52,7 @@ export default function RootLayout({
                 <AuthWrapper>
                   <ErrorBoundary fallbackTitle="Trackr Application Error">
                     {children}
+                    <ToastContainer />
                   </ErrorBoundary>
                 </AuthWrapper>
               </PwaProvider>

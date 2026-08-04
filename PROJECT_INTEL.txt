@@ -153,3 +153,12 @@ Unrecognized tags default to `type = "note"`.
   - **Quick Add Rich Metadata Enrichment**: Enabled `MetadataService.fetchMetadataForCreation` during selection of a provider search result. The system fetches and persists full, structured provider metadata in Firestore, maintaining minimum fetch caching.
   - **Robust Error Handling**: Added a custom `saveError` block inside `QuickAdd` command drawer, capturing and presenting detailed user messages if credential validation, metadata retrieval, or resource creation fails.
 - **Phase 11 — Scalability & Extension Architecture**: Virtualized feeds (`@tanstack/react-virtual`), IndexedDB caching, and dynamic plugin adapter registry.
+- **[COMPLETED] Phase 11.5 — Automatic Background Metadata Enrichment & Hybrid Toast Confirmation**:
+  - **Background Enrichment Trigger**: When a resource is updated or created, `ResourceService` triggers an unawaited background search check if the resource is manual and matches a provider-supported type (book, movie, tv).
+  - **Event-Driven Communication**: Search match results publish a `MetadataMatchFound` event on the `EventBus`, carrying the full enriched details.
+  - **Hybrid / Interactive Toast Confirmation**: A global `ToastContainer` component renders non-blocking glassmorphic notification cards (e.g. "Found movie metadata for '<Title>'") with Apply/Dismiss actions, ensuring that details can be applied even if the edit modal or Quick Add drawer is closed.
+  - **Dynamic Cache Invalidation**: Applying details updates Firestore/localStorage and triggers `MetadataRefreshed` which invalidates React Query cache, instantly updating any open resource details view via a cache-synced `syncedResource` hook.
+- **[COMPLETED] Quick Add Custom Title & Hashtag Extraction for Link Resources**:
+  - **Link Resource Detection**: Automatically shows the custom "Display Title" input field when a URL is parsed or when `#link` (or synonyms) is entered as a hashtag.
+  - **Initial Title Autofill**: Prefills the custom Title input with the cleaned URL representation, while keeping it fully editable.
+  - **Double-Field Hashtag Extraction & Merging**: Extracts hashtags from both the main input and the custom Title input, merging them and removing them from the final saved title.

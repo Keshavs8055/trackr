@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Resource, RESOURCE_TYPES, ResourceType } from "@/types";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUpdateResource, useDeleteResource } from "@/hooks/use-resources";
@@ -71,11 +71,16 @@ export function ResourceDetails({ resource, isOpen, onClose }: ResourceDetailsPr
     };
   };
 
+  const syncedResource = useMemo(() => {
+    if (!resource || !allResources) return resource;
+    return allResources.find(r => r.id === resource.id) || resource;
+  }, [resource, allResources]);
+
   useEffect(() => {
-    if (resource) {
-      setActiveResource(sanitizeResource(resource));
+    if (syncedResource) {
+      setActiveResource(sanitizeResource(syncedResource));
     }
-  }, [resource]);
+  }, [syncedResource]);
 
   useEffect(() => {
     if (activeResource && isOpen) {

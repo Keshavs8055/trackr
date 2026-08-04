@@ -27,12 +27,17 @@ export function QuickAdd() {
   
   const inputRef = React.useRef<HTMLInputElement>(null);
 
+  const [titleValue, setTitleValue] = React.useState("");
+  const isTitleManuallyEdited = React.useRef(false);
+
   React.useEffect(() => {
     if (!quickAddOpen) {
       setInputValue("");
+      setTitleValue("");
       setIsTypingTag(false);
       setSearchTag("");
       setSaveError(null);
+      isTitleManuallyEdited.current = false;
     }
   }, [quickAddOpen]);
 
@@ -146,6 +151,15 @@ export function QuickAdd() {
     }
   };
 
+  const handleTitleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      await handleSave();
+    } else if (e.key === "Escape") {
+      setQuickAddOpen(false);
+    }
+  };
+
   const inferTypeFromTags = (tags: string[]): ResourceType => {
     for (const tag of tags) {
       if (RESERVED_TYPE_TAGS[tag]) {
@@ -161,14 +175,25 @@ export function QuickAdd() {
     
     const rawInput = inputValue;
     const detectedUrl = extractUrl(inputValue);
-    let formattedTags = extractTags(inputValue);
-    if (detectedUrl && !formattedTags.includes('link')) {
+    
+    const mainTags = extractTags(inputValue);
+    const titleTags = isLinkResource ? extractTags(titleValue) : [];
+    let formattedTags = Array.from(new Set([...mainTags, ...titleTags]));
+    if (isLinkResource && !formattedTags.includes('link')) {
       formattedTags = [...formattedTags, 'link'];
     }
-    const title = cleanTitle(inputValue);
+    
+    let title = "";
+    if (isLinkResource) {
+      const cleanedTitleVal = cleanTitle(titleValue);
+      title = cleanedTitleVal !== "Untitled Memory" ? cleanedTitleVal : cleanTitle(inputValue);
+    } else {
+      title = cleanTitle(inputValue);
+    }
+    
     const inferredType = detectedUrl 
       ? (detectedUrl.includes('github.com') ? RESOURCE_TYPES.GITHUB : RESOURCE_TYPES.WEBSITE)
-      : inferTypeFromTags(formattedTags);
+      : (isLinkResource ? RESOURCE_TYPES.WEBSITE : inferTypeFromTags(formattedTags));
 
     try {
       await addResource({ 
@@ -229,6 +254,29 @@ export function QuickAdd() {
 
   const currentTags = React.useMemo(() => extractTags(inputValue), [inputValue]);
   const detectedUrl = React.useMemo(() => extractUrl(inputValue), [inputValue]);
+  const isLinkResource = React.useMemo(() => {
+    return !!detectedUrl || currentTags.includes("link");
+  }, [detectedUrl, currentTags]);
+
+  React.useEffect(() => {
+    if (!inputValue.trim()) {
+      isTitleManuallyEdited.current = false;
+      setTitleValue("");
+      return;
+    }
+
+    if (isLinkResource) {
+      if (!isTitleManuallyEdited.current) {
+        const cleaned = cleanTitle(inputValue);
+        setTitleValue(cleaned !== "Untitled Memory" ? cleaned : "");
+      }
+    } else {
+      if (!isTitleManuallyEdited.current) {
+        setTitleValue("");
+      }
+    }
+  }, [isLinkResource, inputValue]);
+
   const currentType = React.useMemo(() => inferTypeFromTags(currentTags), [currentTags]);
   const cleanSearchQuery = React.useMemo(() => cleanTitle(inputValue), [inputValue]);
 
@@ -318,22 +366,46 @@ export function QuickAdd() {
                   </div>
                 )}
                 
-                {detectedUrl && (
-                  <div className="mx-3 my-2 p-2.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Globe className="size-3.5 text-cyan-400 shrink-0" />
-                      <div className="min-w-0">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-400 block leading-none mb-0.5">
-                          Link Resource Detected
-                        </span>
-                        <p className="text-xs font-mono text-muted-foreground truncate">
-                          {detectedUrl}
-                        </p>
+                {isLinkResource && (
+                  <div className="mx-3 my-2 p-2.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex flex-col gap-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Globe className="size-3.5 text-cyan-400 shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-400 block leading-none mb-0.5">
+                            {detectedUrl ? "Link Resource Detected" : "Link Resource Tagged"}
+                          </span>
+                          {detectedUrl && (
+                            <p className="text-xs font-mono text-muted-foreground truncate">
+                              {detectedUrl}
+                            </p>
+                          )}
+                        </div>
                       </div>
+                      <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[10px] font-bold shrink-0">
+                        #link
+                      </span>
                     </div>
-                    <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[10px] font-bold shrink-0">
-                      #link
-                    </span>
+
+                    <div className="flex flex-col gap-1 border-t border-cyan-500/15 pt-2">
+                      <label htmlFor="quick-add-title" className="text-[9px] font-bold text-muted-foreground/60 uppercase tracking-widest">
+                        Display Title
+                      </label>
+                      <input
+                        id="quick-add-title"
+                        type="text"
+                        value={titleValue}
+                        onChange={(e) => {
+                          setTitleValue(e.target.value);
+                          isTitleManuallyEdited.current = true;
+                        }}
+                        onKeyDown={handleTitleKeyDown}
+                        placeholder="Enter text to display as the title... (e.g. My Website)"
+                        disabled={isSaving}
+                        className="w-full px-2.5 py-1.5 bg-background/50 border border-border/40 rounded-md outline-none text-xs text-foreground placeholder:text-muted-foreground/50 focus:border-cyan-500/35 focus:ring-1 focus:ring-cyan-500/25 transition-all font-medium"
+                        autoComplete="off"
+                      />
+                    </div>
                   </div>
                 )}
 

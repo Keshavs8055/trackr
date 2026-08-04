@@ -7,7 +7,8 @@ import {
   deleteDoc, 
   doc, 
   deleteField,
-  writeBatch
+  writeBatch,
+  getDoc
 } from 'firebase/firestore';
 import { db } from '@/services/firebase';
 import { PROVIDERS, Resource, ResourceProviderMetadata, RESOURCE_TYPES, ResourceType } from '@/types';
@@ -17,6 +18,9 @@ import { SearchIndexBuilder } from '@/domain/search/search-index-builder';
 import { EventBus } from '@/domain/events/event-bus';
 import { extractStatusFromTags } from '@/lib/parser';
 import { getDefaultStatusForType } from '@/domain/status/status-lifecycles';
+import { providerManager } from '@/services/providers/provider-manager';
+import { searchService } from '@/services/providers/search-service';
+import { metadataService } from '@/services/providers/metadata-service';
 
 const DEFAULT_MOCK_RESOURCES: Resource[] = [
   {
@@ -211,6 +215,17 @@ export class ResourceService {
       current.unshift(newResource);
       localStorage.setItem('mock-resources', JSON.stringify(current));
       EventBus.getInstance().publish('ResourceCreated', { resourceId: newResource.id, userId, resource: newResource });
+      
+      this.triggerBackgroundEnrichment(
+        userId,
+        newResource.id,
+        newResource.type,
+        newResource.title,
+        newResource.provider,
+        newResource.image,
+        newResource.tags
+      );
+
       return newResource;
     }
 
@@ -232,6 +247,17 @@ export class ResourceService {
 
     try {
       const docRef = await addDoc(collection(db, 'users', userId, 'resources'), finalPayload);
+      
+      this.triggerBackgroundEnrichment(
+        userId,
+        docRef.id,
+        newResourceData.type,
+        newResourceData.title,
+        newResourceData.provider,
+        newResourceData.image,
+        newResourceData.tags
+      );
+
       return {
         id: docRef.id,
         ...newResourceData,
@@ -293,15 +319,29 @@ export class ResourceService {
 
     if (userId === 'mock-user-id') {
       const current = this.getMockResources();
+      let updatedResource: Resource | undefined;
       const updated = current.map(item => {
         if (item.id === id) {
           const newItem = { ...item, ...cleanUpdate } as Resource;
           if (isNotesEmpty) delete newItem.notes;
+          updatedResource = newItem;
           return newItem;
         }
         return item;
       });
       localStorage.setItem('mock-resources', JSON.stringify(updated));
+
+      if (updatedResource) {
+        this.triggerBackgroundEnrichment(
+          userId,
+          id,
+          updatedResource.type,
+          updatedResource.title,
+          updatedResource.provider,
+          updatedResource.image,
+          updatedResource.tags
+        );
+      }
       return;
     }
 
@@ -323,6 +363,19 @@ export class ResourceService {
     try {
       const docRef = doc(db, 'users', userId, 'resources', id);
       await updateDoc(docRef, finalUpdatePayload);
+
+      const currentResource = await this.getResourceById(userId, id);
+      if (currentResource) {
+        this.triggerBackgroundEnrichment(
+          userId,
+          id,
+          currentResource.type,
+          currentResource.title,
+          currentResource.provider,
+          currentResource.image,
+          currentResource.tags
+        );
+      }
     } catch (err) {
       console.error("Error updating resource:", err);
       throw AppError.fromError(err);
@@ -479,6 +532,68 @@ export class ResourceService {
 
     localStorage.setItem('mock-resources', JSON.stringify(DEFAULT_MOCK_RESOURCES));
     return DEFAULT_MOCK_RESOURCES;
+  }
+
+  public async getResourceById(userId: string, id: string): Promise<Resource | null> {
+    if (userId === 'mock-user-id') {
+      const resources = this.getMockResources();
+      return resources.find(r => r.id === id) || null;
+    }
+    
+    try {
+      const docRef = doc(db, 'users', userId, 'resources', id);
+      const snap = await getDoc(docRef);
+      if (!snap.exists()) return null;
+      return this.normalizeResource(id, userId, snap.data());
+    } catch (err) {
+      console.error("Error getting resource by ID:", err);
+      return null;
+    }
+  }
+
+  private triggerBackgroundEnrichment(
+    userId: string,
+    id: string,
+    type: ResourceType,
+    title: string,
+    currentProvider?: string,
+    image?: string,
+    tags?: string[]
+  ): void {
+    const provider = providerManager.getPrimaryProviderForType(type);
+    if (!provider) return;
+
+    const needsEnrichment = !currentProvider || currentProvider === 'manual';
+    if (!needsEnrichment) return;
+
+    (async () => {
+      try {
+        const searchResult = await searchService.search(userId, type, title, 1);
+        const firstResult = searchResult.results.results?.[0];
+
+        if (firstResult) {
+          const enriched = await metadataService.fetchMetadataForCreation(
+            userId,
+            firstResult.provider,
+            firstResult.providerId
+          );
+
+          EventBus.getInstance().publish('MetadataMatchFound', {
+            resourceId: id,
+            resourceTitle: title,
+            type,
+            provider: firstResult.provider,
+            providerId: firstResult.providerId,
+            image: enriched.image || firstResult.image || image,
+            metadata: enriched.metadata || {},
+            providerMetadata: enriched.providerMetadata,
+            tags,
+          });
+        }
+      } catch (err) {
+        console.error("Background metadata enrichment failed:", err);
+      }
+    })();
   }
 }
 

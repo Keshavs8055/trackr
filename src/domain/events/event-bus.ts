@@ -2,6 +2,7 @@ export type DomainEventType =
   | 'ResourceCreated'
   | 'StatusChanged'
   | 'MetadataRefreshed'
+  | 'MetadataMatchFound'
   | 'CollectionAssigned';
 
 export interface DomainEvent<T = any> {
