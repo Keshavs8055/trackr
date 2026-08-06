@@ -17,19 +17,13 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
     if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js')
-          .then((reg) => {
-            console.log('PWA Service Worker registered successfully with scope:', reg.scope);
-          })
           .catch((err) => {
             console.error('PWA Service Worker registration failed:', err);
           });
       });
     } else if ('serviceWorker' in navigator && process.env.NODE_ENV === 'development') {
-      // In development, we can still register it to test cache/installation, but usually with --experimental-https or similar
+      // In development, register to test cache/installation
       navigator.serviceWorker.register('/sw.js')
-        .then((reg) => {
-          console.log('PWA Service Worker registered in Dev Mode:', reg.scope);
-        })
         .catch((err) => {
           console.warn('PWA Service Worker dev registration skipped/failed:', err);
         });

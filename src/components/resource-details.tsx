@@ -95,6 +95,28 @@ export function ResourceDetails({ resource, isOpen, onClose }: ResourceDetailsPr
     }
   }, [activeResource, isOpen]);
 
+  const autoFetchedRef = useRef<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!isOpen || !activeResource || !isEditing) return;
+    const resId = activeResource.id;
+    const hasMeta = activeResource.metadata && Object.keys(activeResource.metadata).length > 0;
+    const isSupportedType = ['movie', 'tv', 'book', 'github', 'website', 'article'].includes(typeValue || activeResource.type);
+    
+    if (isSupportedType && !hasMeta && !autoFetchedRef.current[resId] && !isRefreshing) {
+      autoFetchedRef.current[resId] = true;
+      refreshMetadata(activeResource)
+        .then((updates) => {
+          if (isOpen && updates) {
+            setActiveResource((prev) => (prev ? { ...prev, ...updates } : null));
+          }
+        })
+        .catch((err) => {
+          console.warn("Auto edit metadata fetch skipped or failed:", err);
+        });
+    }
+  }, [isOpen, isEditing, activeResource?.id, typeValue]);
+
   useEffect(() => {
     if (isEditing && editInputRef.current) {
       editInputRef.current.focus();
@@ -163,6 +185,28 @@ export function ResourceDetails({ resource, isOpen, onClose }: ResourceDetailsPr
     } catch (err: any) {
       setActionError(err?.userMessage || "Failed to refresh metadata.");
       setTimeout(() => setActionError(null), 3500);
+    }
+  };
+
+  const handleRemoveDetailsPart = async () => {
+    if (!activeResource) return;
+    try {
+      await updateResource({
+        id: activeResource.id,
+        provider: 'manual',
+        providerId: undefined,
+        metadata: {},
+        providerMetadata: undefined,
+      });
+      setActiveResource((prev) => (prev ? {
+        ...prev,
+        provider: 'manual',
+        providerId: undefined,
+        metadata: {},
+        providerMetadata: undefined,
+      } : null));
+    } catch (err) {
+      console.error("Failed to remove details part:", err);
     }
   };
 
@@ -408,7 +452,12 @@ export function ResourceDetails({ resource, isOpen, onClose }: ResourceDetailsPr
                   )}
 
                   {/* Render Structured Provider Metadata */}
-                  <MetadataSection resource={activeResource} />
+                  <MetadataSection
+                    resource={activeResource}
+                    onRetry={handleManualRefresh}
+                    onRemoveDetails={handleRemoveDetailsPart}
+                    isRefreshing={isRefreshing}
+                  />
 
                   {/* Render Type-Specific Detail Renderer Card */}
                   {activeResource.type === 'movie' && <MovieDetailsCard resource={activeResource} />}

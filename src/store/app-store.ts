@@ -16,6 +16,8 @@ interface AppState {
   setIntegrationsOpen: (open: boolean) => void;
   filterDrawerOpen: boolean;
   setFilterDrawerOpen: (open: boolean) => void;
+  activeStatusMenuId: string | null;
+  setActiveStatusMenuId: (id: string | null) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -34,4 +36,6 @@ export const useAppStore = create<AppState>((set) => ({
   setIntegrationsOpen: (open) => set({ integrationsOpen: open }),
   filterDrawerOpen: false,
   setFilterDrawerOpen: (open) => set({ filterDrawerOpen: open }),
+  activeStatusMenuId: null,
+  setActiveStatusMenuId: (id) => set({ activeStatusMenuId: id }),
 }));

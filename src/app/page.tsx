@@ -133,8 +133,23 @@ export default function Home() {
       const matchesProviders = selectedProviders.length === 0 || selectedProviders.includes(provider);
 
       // 5. Statuses
-      const status = resource.status || 'backlog';
-      const matchesStatuses = selectedStatuses.length === 0 || selectedStatuses.includes(status);
+      const status = (resource.status || 'backlog').toLowerCase();
+      const matchesStatuses = selectedStatuses.length === 0 || selectedStatuses.some((selected) => {
+        const normSel = selected.toLowerCase();
+        if (normSel === 'in-progress' || normSel === 'in_progress') {
+          return status === 'in_progress' || status === 'in-progress' || status === 'watching' || status === 'reading';
+        }
+        if (normSel === 'planned') {
+          return status === 'planned' || status === 'plan_to_watch' || status === 'plan_to_read';
+        }
+        if (normSel === 'dropped' || normSel === 'abandoned') {
+          return status === 'dropped' || status === 'abandoned' || status === 'archived';
+        }
+        if (normSel === 'completed') {
+          return status === 'completed' || status === 'watched' || status === 'read';
+        }
+        return status === normSel;
+      });
 
       // 6. Year Range
       let matchesYear = true;

@@ -1,16 +1,25 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/components/auth-provider";
 import { AuthWrapper } from "@/components/auth-wrapper";
 import { PwaProvider } from "@/components/pwa-provider";
 import QueryProvider from "@/components/query-provider";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
+import { ToastContainer } from "@/components/ui/toast-container";
 import "./globals.css";
 
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
 });
+
+export const viewport: Viewport = {
+  themeColor: "#0B0B0C",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+};
 
 export const metadata: Metadata = {
   title: "Trackr",
@@ -28,9 +37,6 @@ export const metadata: Metadata = {
     ],
   },
 };
-
-import { ErrorBoundary } from "@/components/ui/error-boundary";
-import { ToastContainer } from "@/components/ui/toast-container";
 
 export default function RootLayout({
   children,

@@ -30,14 +30,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let isMounted = true;
 
-    // Safety timeout: Ensure loading never hangs indefinitely
+    // Safety timeout: Ensure loading transitions to completed state if auth takes too long
     const safetyTimer = setTimeout(() => {
       if (isMounted) {
         setLoading(false);
       }
-    }, 2500);
+    }, 1500);
 
-    // Check for demo mode session
+    // Check for demo mode session (set when user explicitly clicked "Try Demo Mode")
     const isDemoSession = typeof window !== "undefined" && localStorage.getItem("trackr_auth_demo") === "true";
     if (isDemoSession) {
       const mockUser = {
@@ -47,29 +47,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         photoURL: 'https://ui-avatars.com/api/?name=Test+User&background=random',
       };
       setUser(mockUser as any);
+      setLoading(false);
+      clearTimeout(safetyTimer);
+      
+      // Asynchronously load credentials for demo user
       try {
         providerService.initializeCredentials('mock-user-id');
       } catch (err) {
         console.warn("Credential initialization failed in demo mode:", err);
       }
-      setLoading(false);
-      clearTimeout(safetyTimer);
       return;
     }
 
     try {
-      const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
         if (!isMounted) return;
         setUser(firebaseUser);
+        setLoading(false);
+        clearTimeout(safetyTimer);
+
         if (firebaseUser) {
           try {
-            await providerService.initializeCredentials(firebaseUser.uid);
+            providerService.initializeCredentials(firebaseUser.uid);
           } catch (err) {
             console.warn("Error initializing credentials on auth state change:", err);
           }
         }
-        setLoading(false);
-        clearTimeout(safetyTimer);
       });
 
       return () => {
@@ -78,7 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         unsubscribe();
       };
     } catch (e) {
-      console.warn("Firebase Auth not initialized correctly. Falling back to default state.");
+      console.warn("Firebase Auth not initialized correctly. Falling back to homepage state.");
       if (isMounted) {
         setLoading(false);
         clearTimeout(safetyTimer);

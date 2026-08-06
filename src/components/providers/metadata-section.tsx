@@ -1,16 +1,62 @@
 import React from 'react';
 import { Resource } from '@/types';
-import { Film, BookOpen, Star, Calendar, Clock, User, Hash } from 'lucide-react';
+import { Film, BookOpen, Star, Calendar, Clock, User, Hash, AlertCircle, RefreshCw, Trash2 } from 'lucide-react';
 
 interface MetadataSectionProps {
   resource: Resource;
+  onRetry?: () => void;
+  onRemoveDetails?: () => void;
+  isRefreshing?: boolean;
 }
 
-export function MetadataSection({ resource }: MetadataSectionProps) {
+export function MetadataSection({ resource, onRetry, onRemoveDetails, isRefreshing }: MetadataSectionProps) {
   const meta = resource.metadata || {};
   const hasMeta = Object.keys(meta).length > 0;
 
-  if (!hasMeta && !resource.providerId) return null;
+  if (!hasMeta) {
+    if (resource.provider && resource.provider !== 'manual') {
+      return (
+        <div className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 text-xs space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest flex items-center gap-1.5">
+              <AlertCircle className="size-3.5" />
+              Provider Details Not Found
+            </span>
+            <span className="text-[10px] text-muted-foreground capitalize">
+              Provider: {resource.provider}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Catalog details for "{resource.title}" could not be retrieved from {resource.provider}.
+          </p>
+          <div className="flex items-center gap-2 pt-1">
+            {onRetry && (
+              <button
+                type="button"
+                onClick={onRetry}
+                disabled={isRefreshing}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs font-bold transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`size-3 ${isRefreshing ? "animate-spin" : ""}`} />
+                <span>Retry Fetch</span>
+              </button>
+            )}
+            {onRemoveDetails && (
+              <button
+                type="button"
+                onClick={onRemoveDetails}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-secondary/60 hover:bg-secondary text-muted-foreground hover:text-foreground text-xs font-semibold transition-colors"
+              >
+                <Trash2 className="size-3 text-rose-400" />
+                <span>Remove Details Part</span>
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
+    return null;
+  }
 
   const year = meta.year || meta.publishYear ? String(meta.year || meta.publishYear) : undefined;
   const runtime = meta.runtime ? String(meta.runtime) : undefined;

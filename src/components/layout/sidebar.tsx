@@ -27,8 +27,7 @@ export function Sidebar() {
     if (!installPrompt) return;
     try {
       installPrompt.prompt();
-      const { outcome } = await installPrompt.userChoice;
-      console.log(`User choice outcome: ${outcome}`);
+      await installPrompt.userChoice;
     } catch (err) {
       console.error("Failed to prompt installation:", err);
     } finally {

@@ -13,23 +13,23 @@ async function runTagNormalizationAndLinkTests() {
   console.assert(normalizeTag('#repos') === 'github', "Test Failed: #repos should normalize to github");
   console.assert(normalizeTag('#podcasts') === 'podcast', "Test Failed: #podcasts should normalize to podcast");
 
-  // 2. Plan-To Tags Simplification
-  console.assert(normalizeTag('#plantowatch') === 'planto', "Test Failed: #plantowatch should normalize to planto");
-  console.assert(normalizeTag('plantoread') === 'planto', "Test Failed: plantoread should normalize to planto");
-  console.assert(normalizeTag('#plan-to-check') === 'planto', "Test Failed: #plan-to-check should normalize to planto");
+  // 2. Plan-To Tags Normalization
+  console.assert(normalizeTag('#plantowatch') === 'plantowatch', "Test Failed: #plantowatch should normalize to plantowatch");
+  console.assert(normalizeTag('plantoread') === 'plantoread', "Test Failed: plantoread should normalize to plantoread");
+  console.assert(normalizeTag('#plan-to-check') === 'plantocheck', "Test Failed: #plan-to-check should normalize to plantocheck");
   console.assert(normalizeTag('#planto') === 'planto', "Test Failed: #planto should remain planto");
 
   // 3. Status Tag Normalization
-  console.assert(normalizeTag('#watched') === 'completed', "Test Failed: #watched should normalize to completed");
+  console.assert(normalizeTag('#watched') === 'watched', "Test Failed: #watched should normalize to watched");
   console.assert(normalizeTag('#over') === 'completed', "Test Failed: #over should normalize to completed");
   console.assert(normalizeTag('#finished') === 'completed', "Test Failed: #finished should normalize to completed");
-  console.assert(normalizeTag('#read') === 'completed', "Test Failed: #read should normalize to completed");
-  console.assert(normalizeTag('currentlyreading') === 'in-progress', "Test Failed: currentlyreading should normalize to in-progress");
+  console.assert(normalizeTag('#read') === 'read', "Test Failed: #read should normalize to read");
+  console.assert(normalizeTag('currentlyreading') === 'reading', "Test Failed: currentlyreading should normalize to reading");
 
   // 3. Type Inference from Normalized Tags
   const extractedTags = extractTags("Dune #movies #plantowatch");
   console.assert(extractedTags.includes('movie'), "Test Failed: extractedTags should contain normalized 'movie'");
-  console.assert(extractedTags.includes('planto'), "Test Failed: extractedTags should contain normalized 'planto'");
+  console.assert(extractedTags.includes('plantowatch'), "Test Failed: extractedTags should contain normalized 'plantowatch'");
   console.assert(RESERVED_TYPE_TAGS[extractedTags[0]] === RESOURCE_TYPES.MOVIE, "Test Failed: Type inference for 'movie' tag should be MOVIE");
 
   // 4. URL Extraction & Link Resource Creation

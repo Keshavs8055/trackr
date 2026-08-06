@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Resource } from '@/types';
 import { getStatusConfig, getStatusesForType } from '@/domain/status/status-lifecycles';
 import { useUpdateResource } from '@/hooks/use-resources';
+import { useAppStore } from '@/store/app-store';
 import { ChevronDown, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -13,14 +14,15 @@ interface StatusBadgeProps {
 }
 
 export const StatusBadge = React.memo(function StatusBadge({ resource, compact = false }: StatusBadgeProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const { activeStatusMenuId, setActiveStatusMenuId } = useAppStore();
   const { mutateAsync: updateResource, isPending } = useUpdateResource();
 
+  const isOpen = activeStatusMenuId === resource.id;
   const currentStatus = getStatusConfig(resource.type, resource.status);
   const availableStatuses = getStatusesForType(resource.type);
 
   const handleSelectStatus = async (statusValue: string) => {
-    setIsOpen(false);
+    setActiveStatusMenuId(null);
     if (statusValue === resource.status) return;
 
     try {
@@ -33,6 +35,16 @@ export const StatusBadge = React.memo(function StatusBadge({ resource, compact =
     }
   };
 
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleGlobalClick = () => {
+      setActiveStatusMenuId(null);
+    };
+    // Use capture phase so we get the click before react stops propagation
+    document.addEventListener('click', handleGlobalClick, { capture: true });
+    return () => document.removeEventListener('click', handleGlobalClick, { capture: true });
+  }, [isOpen, setActiveStatusMenuId]);
+
   return (
     <div className="relative inline-block text-left">
       <button
@@ -40,7 +52,7 @@ export const StatusBadge = React.memo(function StatusBadge({ resource, compact =
         disabled={isPending}
         onClick={(e) => {
           e.stopPropagation();
-          setIsOpen(!isOpen);
+          setActiveStatusMenuId(isOpen ? null : resource.id);
         }}
         className={`inline-flex items-center gap-1 font-semibold rounded-full border transition-all hover:scale-105 active:scale-95 ${
           compact
@@ -55,15 +67,6 @@ export const StatusBadge = React.memo(function StatusBadge({ resource, compact =
       <AnimatePresence>
         {isOpen && (
           <>
-            {/* Backdrop click listener */}
-            <div
-              className="fixed inset-0 z-30"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsOpen(false);
-              }}
-            />
-
             {/* Dropdown Menu */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: -4 }}
@@ -71,9 +74,9 @@ export const StatusBadge = React.memo(function StatusBadge({ resource, compact =
               exit={{ opacity: 0, scale: 0.95, y: -4 }}
               transition={{ duration: 0.15 }}
               onClick={(e) => e.stopPropagation()}
-              className="absolute left-0 mt-1 z-40 w-36 py-1 bg-card border border-border/60 rounded-xl shadow-lg overflow-hidden backdrop-blur-md"
+              className="absolute right-0 sm:left-0 mt-1 z-[100] w-36 py-1 bg-card dark:bg-[#16181D] border border-border shadow-2xl rounded-xl overflow-hidden opacity-100 z-[100]"
             >
-              <div className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border/20">
+              <div className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border/30 bg-secondary">
                 Change Status
               </div>
               {availableStatuses.map((item) => {
@@ -82,7 +85,7 @@ export const StatusBadge = React.memo(function StatusBadge({ resource, compact =
                   <button
                     key={item.value}
                     onClick={() => handleSelectStatus(item.value)}
-                    className={`w-full px-2.5 py-1.5 text-left text-xs font-medium flex items-center justify-between hover:bg-secondary/40 transition-colors ${item.colorClass}`}
+                    className={`w-full px-2.5 py-1.5 text-left text-xs font-medium flex items-center justify-between hover:bg-secondary/60 transition-colors ${item.colorClass}`}
                   >
                     <span>{item.label}</span>
                     {isSelected && <Check className="size-3 text-primary" />}

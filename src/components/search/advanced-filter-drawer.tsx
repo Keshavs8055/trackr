@@ -11,11 +11,12 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const STATUS_OPTIONS = [
-  "backlog",
-  "planned",
-  "in-progress",
-  "completed",
-  "abandoned"
+  { id: "backlog", label: "Backlog / To Read" },
+  { id: "wishlist", label: "Wishlist" },
+  { id: "planned", label: "Plan to Watch / Read" },
+  { id: "in-progress", label: "In Progress / Watching / Reading" },
+  { id: "completed", label: "Completed / Watched / Read" },
+  { id: "dropped", label: "Dropped / Abandoned" }
 ];
 
 const PROVIDER_OPTIONS = [
@@ -184,19 +185,19 @@ export function AdvancedFilterDrawer() {
                 </h3>
                 <div className="flex flex-wrap gap-2">
                   {STATUS_OPTIONS.map(status => {
-                    const isSelected = localStatuses.includes(status);
+                    const isSelected = localStatuses.includes(status.id);
                     return (
                       <button
-                        key={status}
-                        onClick={() => toggleLocalStatus(status)}
+                        key={status.id}
+                        onClick={() => toggleLocalStatus(status.id)}
                         className={cn(
-                          "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all active:scale-95 capitalize",
+                          "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all active:scale-95",
                           isSelected
                             ? "bg-primary text-primary-foreground border-primary shadow-sm"
                             : "bg-secondary/40 border-border/40 text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
                         )}
                       >
-                        {status.replace("-", " ")}
+                        {status.label}
                       </button>
                     );
                   })}

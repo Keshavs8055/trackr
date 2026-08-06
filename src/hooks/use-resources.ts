@@ -1,18 +1,39 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { resourceService } from '@/services/resource-service';
 import { useAuth } from '@/components/auth-provider';
 import { Resource } from '@/types';
 import { EventBus } from '@/domain/events/event-bus';
+import { indexedDBCache } from '@/cache/indexed-db-cache';
 
 export function useResources() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  // Instantaneous cold start hydration from IndexedDB
+  useEffect(() => {
+    if (!user?.uid) return;
+    const currentData = queryClient.getQueryData<Resource[]>(['resources', user.uid]);
+    if (!currentData || currentData.length === 0) {
+      indexedDBCache.getCachedResources().then((cached) => {
+        if (cached && cached.length > 0) {
+          queryClient.setQueryData<Resource[]>(['resources', user.uid], (existing) => {
+            return (existing && existing.length > 0) ? existing : cached;
+          });
+        }
+      });
+    }
+  }, [user?.uid, queryClient]);
 
   return useQuery({
     queryKey: ['resources', user?.uid],
     queryFn: async () => {
       if (!user?.uid) return [];
-      return resourceService.getResources(user.uid);
+      const remoteResources = await resourceService.getResources(user.uid);
+      if (remoteResources && remoteResources.length > 0) {
+        indexedDBCache.cacheResources(remoteResources).catch(() => {});
+      }
+      return remoteResources;
     },
     enabled: !!user?.uid,
     staleTime: 5 * 60 * 1000,
@@ -27,7 +48,11 @@ export function useAddResource() {
   return useMutation({
     mutationFn: async (resource: Omit<Resource, 'id' | 'createdAt' | 'updatedAt' | 'userId'>) => {
       if (!user?.uid) throw new Error("Must be logged in to add resource");
-      return resourceService.addResource(user.uid, resource);
+      const created = await resourceService.addResource(user.uid, resource);
+      if (created) {
+        indexedDBCache.cacheResource(created).catch(() => {});
+      }
+      return created;
     },
     onMutate: async (newResource) => {
       await queryClient.cancelQueries({ queryKey: ['resources', user?.uid] });
@@ -74,6 +99,10 @@ export function useUpdateResource() {
       const currentResource = previousResources?.find(r => r.id === id);
 
       await resourceService.updateResource(user.uid, id, update);
+
+      if (currentResource) {
+        indexedDBCache.cacheResource({ ...currentResource, ...update, updatedAt: Date.now() }).catch(() => {});
+      }
 
       // Emit domain events for activity logger
       if (update.status && currentResource?.status !== update.status) {
@@ -124,7 +153,8 @@ export function useDeleteResource() {
   return useMutation({
     mutationFn: async (id: string) => {
       if (!user?.uid) throw new Error("Must be logged in");
-      return resourceService.deleteResource(user.uid, id);
+      await resourceService.deleteResource(user.uid, id);
+      indexedDBCache.removeResource(id).catch(() => {});
     },
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: ['resources', user?.uid] });

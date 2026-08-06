@@ -5,8 +5,9 @@ import { Resource, ResourceRelationship, RelationshipType } from '@/types';
 import { useResourceRelationships, useRemoveRelationship } from '@/hooks/use-relationships';
 import { useResources } from '@/hooks/use-resources';
 import { RelationshipSelectorModal } from './relationship-selector-modal';
-import { GitFork, Plus, Trash2, ArrowUpRight, ArrowDownLeft, Link2, ExternalLink } from 'lucide-react';
+import { GitFork, Plus, Trash2, ArrowUpRight, ArrowDownLeft, Link2, ExternalLink, Info, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface RelationshipGraphCardProps {
   resource: Resource;
@@ -39,6 +40,7 @@ export function RelationshipGraphCard({ resource, onOpenResourceDetails }: Relat
   const removeRelationshipMutation = useRemoveRelationship();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showInfoBanner, setShowInfoBanner] = useState(false);
 
   const relationships = relsData?.all || [];
 
@@ -57,21 +59,76 @@ export function RelationshipGraphCard({ resource, onOpenResourceDetails }: Relat
     <div className="space-y-3 pt-1">
       {/* Card Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <GitFork className="size-4 text-primary" />
-          <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <GitFork className="size-4 text-primary flex-shrink-0" />
+          <h4 className="text-xs font-bold uppercase tracking-wider text-foreground truncate">
             Connected Knowledge Graph ({relationships.length})
           </h4>
+          <button
+            type="button"
+            onClick={() => setShowInfoBanner(!showInfoBanner)}
+            className="p-1 text-muted-foreground hover:text-primary transition-colors rounded-full hover:bg-secondary/60"
+            title="How Knowledge Graph works"
+            aria-label="Knowledge Graph info"
+          >
+            <Info className="size-3.5" />
+          </button>
         </div>
 
         <button
           onClick={() => setIsModalOpen(true)}
-          className="px-2.5 py-1 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold flex items-center gap-1 transition-colors"
+          className="px-2.5 py-1 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold flex items-center gap-1 transition-colors shrink-0"
         >
           <Plus className="size-3.5" />
           <span>Connect</span>
         </button>
       </div>
+
+      {/* Small Responsive Helper Text */}
+      <p className="text-[11px] text-muted-foreground/80 leading-relaxed">
+        Link books, movies, repositories, and articles to construct your personal bi-directional knowledge web.
+      </p>
+
+      {/* Interactive Info Banner */}
+      <AnimatePresence>
+        {showInfoBanner && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="p-3.5 rounded-xl bg-primary/5 border border-primary/20 text-xs space-y-2 relative">
+              <button
+                onClick={() => setShowInfoBanner(false)}
+                className="absolute top-2 right-2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+
+              <div className="flex items-center gap-1.5 font-bold text-primary text-[11px] uppercase tracking-wider">
+                <Info className="size-3.5" />
+                <span>How to use Knowledge Graph</span>
+              </div>
+
+              <ul className="space-y-1.5 text-[11px] text-foreground/80 pl-1">
+                <li className="flex items-start gap-1.5">
+                  <span className="text-primary font-bold">•</span>
+                  <span><strong>Bi-directional links:</strong> Connecting items creates a linked network. Updating one reflects on both resources.</span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="text-primary font-bold">•</span>
+                  <span><strong>Relationship Types:</strong> Categorize connections as <em>Adaptation Of</em>, <em>Sequel To</em>, <em>Repository For</em>, <em>Article For</em>, <em>Author Of</em>, or <em>Related To</em>.</span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="text-primary font-bold">•</span>
+                  <span><strong>Quick Navigation:</strong> Click any connected resource card to instantly navigate into its details modal.</span>
+                </li>
+              </ul>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Relationship Graph Grid */}
       {isLoading ? (
