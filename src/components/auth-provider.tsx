@@ -28,19 +28,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let isMounted = true;
 
-    // Safety timeout: Ensure loading transitions to completed state if auth takes too long
-    const safetyTimer = setTimeout(() => {
-      if (isMounted) {
-        setLoading(false);
-      }
-    }, 1500);
-
     try {
       const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
         if (!isMounted) return;
         setUser(firebaseUser);
         setLoading(false);
-        clearTimeout(safetyTimer);
 
         if (firebaseUser) {
           try {
@@ -53,27 +45,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return () => {
         isMounted = false;
-        clearTimeout(safetyTimer);
         unsubscribe();
       };
     } catch (e) {
-      console.warn("Firebase Auth not initialized correctly. Falling back to homepage state.");
+      console.warn("Firebase Auth not initialized correctly.");
       if (isMounted) {
         setLoading(false);
-        clearTimeout(safetyTimer);
       }
     }
   }, []);
 
   const signInWithGoogle = async () => {
+    const provider = new GoogleAuthProvider();
     try {
-      const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       console.log("Signed in successfully:", result.user);
-    } catch (error: any) {
-      console.error("CODE:", error?.code);
-      console.error("MESSAGE:", error?.message);
-      console.error("FULL ERROR:", error);
+    } catch (error: unknown) {
+      console.error("Google sign-in failed:", error);
     }
   };
 
