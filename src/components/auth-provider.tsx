@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { User as FirebaseUser, onAuthStateChanged, signInWithPopup, signInWithRedirect, GoogleAuthProvider, signOut } from "firebase/auth";
+import { User as FirebaseUser, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "firebase/auth";
 import { auth } from "@/services/firebase";
 import { providerService } from "@/services/provider-service";
 
@@ -66,26 +66,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signInWithGoogle = async () => {
-    const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: "select_account" });
-
     try {
-      // Execute popup immediately without prior state delay to preserve user event gesture context
-      await signInWithPopup(auth, provider);
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      console.log("Signed in successfully:", result.user);
     } catch (error: any) {
-      console.error("Google Auth Error Code:", error?.code);
-      console.error("Google Auth Message:", error?.message);
-      console.error("Google Auth Full Error:", error);
-
-      // Automatic fallback if popup is blocked by browser restrictions
-      if (error?.code === "auth/popup-blocked" || error?.code === "auth/cancelled-popup-request") {
-        console.warn("[Auth] Popup blocked by browser. Falling back to signInWithRedirect...");
-        try {
-          await signInWithRedirect(auth, provider);
-        } catch (redirectError: any) {
-          console.error("Google Auth Redirect Fallback Error:", redirectError);
-        }
-      }
+      console.error("CODE:", error?.code);
+      console.error("MESSAGE:", error?.message);
+      console.error("FULL ERROR:", error);
     }
   };
 
