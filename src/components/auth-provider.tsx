@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { User as FirebaseUser, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "firebase/auth";
+import { User as FirebaseUser, onAuthStateChanged, signInWithPopup, signInWithRedirect, GoogleAuthProvider, signOut } from "firebase/auth";
 import { auth } from "@/services/firebase";
 import { providerService } from "@/services/provider-service";
 
@@ -9,7 +9,6 @@ interface AuthContextType {
   user: FirebaseUser | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
-  signInWithMock: () => void;
   logout: () => Promise<void>;
 }
 
@@ -17,7 +16,6 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   signInWithGoogle: async () => {},
-  signInWithMock: () => {},
   logout: async () => {},
 });
 
@@ -36,28 +34,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
       }
     }, 1500);
-
-    // Check for demo mode session (set when user explicitly clicked "Try Demo Mode")
-    const isDemoSession = typeof window !== "undefined" && localStorage.getItem("trackr_auth_demo") === "true";
-    if (isDemoSession) {
-      const mockUser = {
-        uid: 'mock-user-id',
-        displayName: 'Test User',
-        email: 'test@trackr.app',
-        photoURL: 'https://ui-avatars.com/api/?name=Test+User&background=random',
-      };
-      setUser(mockUser as any);
-      setLoading(false);
-      clearTimeout(safetyTimer);
-      
-      // Asynchronously load credentials for demo user
-      try {
-        providerService.initializeCredentials('mock-user-id');
-      } catch (err) {
-        console.warn("Credential initialization failed in demo mode:", err);
-      }
-      return;
-    }
 
     try {
       const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -89,53 +65,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const signInWithMock = () => {
-    // @ts-ignore - Mock user for UI testing
-    const mockUser = {
-      uid: 'mock-user-id',
-      displayName: 'Test User',
-      email: 'test@trackr.app',
-      photoURL: 'https://ui-avatars.com/api/?name=Test+User&background=random',
-    };
-    if (typeof window !== "undefined") {
-      localStorage.setItem("trackr_auth_demo", "true");
-    }
-    setUser(mockUser as any);
-    try {
-      providerService.initializeCredentials('mock-user-id');
-    } catch (err) {
-      console.warn("Error initializing demo credentials:", err);
-    }
-    setLoading(false);
-  };
-
   const signInWithGoogle = async () => {
-    setLoading(true);
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
+
     try {
-      const provider = new GoogleAuthProvider();
+      // Execute popup immediately without prior state delay to preserve user event gesture context
       await signInWithPopup(auth, provider);
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("trackr_auth_demo");
-      }
     } catch (error: any) {
-      console.error("Error signing in with Google:", error);
-      if (error.code === 'auth/invalid-api-key' || error.message?.includes('api key')) {
-        console.warn("Using mock user because Firebase API keys are missing.");
-        signInWithMock();
-      } else {
-        console.warn("Google sign-in failed. Falling back to offline mock mode.");
-        signInWithMock();
+      console.error("Google Auth Error Code:", error?.code);
+      console.error("Google Auth Message:", error?.message);
+      console.error("Google Auth Full Error:", error);
+
+      // Automatic fallback if popup is blocked by browser restrictions
+      if (error?.code === "auth/popup-blocked" || error?.code === "auth/cancelled-popup-request") {
+        console.warn("[Auth] Popup blocked by browser. Falling back to signInWithRedirect...");
+        try {
+          await signInWithRedirect(auth, provider);
+        } catch (redirectError: any) {
+          console.error("Google Auth Redirect Fallback Error:", redirectError);
+        }
       }
-    } finally {
-      setLoading(false);
     }
   };
 
   const logout = async () => {
     try {
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("trackr_auth_demo");
-      }
       setUser(null);
       await signOut(auth);
     } catch (error) {
@@ -146,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signInWithMock, logout }}>
+    <AuthContext.Provider value={{ user, loading, signInWithGoogle, logout }}>
       {children}
     </AuthContext.Provider>
   );

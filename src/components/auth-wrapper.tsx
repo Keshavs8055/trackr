@@ -8,7 +8,7 @@ import { motion } from "framer-motion";
 import { Logo } from "@/components/ui/logo";
 
 export function AuthWrapper({ children }: { children: React.ReactNode }) {
-  const { user, loading, signInWithGoogle, signInWithMock } = useAuth();
+  const { user, loading, signInWithGoogle } = useAuth();
 
   if (loading) {
     return (
@@ -39,21 +39,13 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
           </p>
           <p className="text-xs text-muted-foreground">Don't worry, your data won't be tracked.</p>
             
-          <div className="flex flex-col sm:flex-row gap-3 w-full justify-center">
+          <div className="flex w-full justify-center">
             <Button 
               size="lg" 
-              className="w-full sm:w-auto h-12 px-8 text-base shadow-xl hover:scale-105 transition-transform" 
+              className="w-full max-w-xs h-12 text-base shadow-xl hover:scale-105 transition-transform animate-shimmer" 
               onClick={signInWithGoogle}
             >
               Sign in with Google
-            </Button>
-            <Button 
-              size="lg" 
-              variant="outline"
-              className="w-full sm:w-auto h-12 px-8 text-base hover:scale-105 transition-transform" 
-              onClick={signInWithMock}
-            >
-              Try Demo Mode
             </Button>
           </div>
         </motion.div>

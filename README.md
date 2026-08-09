@@ -127,6 +127,14 @@ graph TD
    npm run lint
    ```
 
+#### 🌐 Vercel & Production Auth Deployment Checklist
+When deploying to Vercel or a custom domain, ensure:
+1. **Firebase Authorized Domains**: Add your production domain in **Firebase Console → Authentication → Settings → Authorized Domains**:
+   - `your-app.vercel.app`
+   - `your-custom-domain.com`
+2. **Environment Variables**: Add all `NEXT_PUBLIC_*` environment variables (especially `NEXT_PUBLIC_AUTH_DOMAIN`) to your Vercel Project Environment Settings.
+3. **Popup Blockers**: The app executes `signInWithPopup` synchronously upon user interaction and automatically falls back to `signInWithRedirect` if popup blockers intercept the window.
+
 ---
 
 ### 3. Running Unit Tests
