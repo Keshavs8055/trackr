@@ -10,10 +10,11 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/components/auth-provider";
 import { useAppStore } from "@/store/app-store";
 import { useTagAction } from "@/hooks/use-tag-action";
-import { Archive, Plus, LogOut, Download } from "lucide-react";
+import { Archive, Plus, LogOut, Download, HelpCircle } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
 import { ConnectionStatus } from "./connection-status";
 import { ArchivePortabilityModal } from "@/components/settings/archive-portability-modal";
+import { UserGuideModal } from "@/components/guide/user-guide-modal";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -22,6 +23,7 @@ export function Sidebar() {
   const installPrompt = useAppStore(s => s.installPrompt);
   const setInstallPrompt = useAppStore(s => s.setInstallPrompt);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+  const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
 
   const handleInstallClick = async () => {
     if (!installPrompt) return;
@@ -51,7 +53,16 @@ export function Sidebar() {
             <span className="text-xs text-muted-foreground/75 truncate pr-1">
               {user?.displayName ? `${user.displayName.split(' ')[0]}'s Archive` : "Personal Archive"}
             </span>
-            <ConnectionStatus />
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setIsGuideModalOpen(true)}
+                title="How to Use Guide"
+                className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+              >
+                <HelpCircle className="size-3.5 text-primary" />
+              </button>
+              <ConnectionStatus />
+            </div>
           </div>
         </div>
 
@@ -102,6 +113,14 @@ export function Sidebar() {
         </button>
 
         <button 
+          onClick={() => setIsGuideModalOpen(true)}
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary/20 text-foreground h-9 text-xs font-semibold hover:bg-secondary/50 active:scale-98 transition-all"
+        >
+          <HelpCircle className="size-3.5 text-primary" />
+          <span>How to Use Guide</span>
+        </button>
+
+        <button 
           onClick={() => setIsArchiveModalOpen(true)}
           className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary/20 text-foreground h-9 text-xs font-semibold hover:bg-secondary/50 active:scale-98 transition-all"
         >
@@ -121,6 +140,7 @@ export function Sidebar() {
         </div>
       </div>
       <ArchivePortabilityModal isOpen={isArchiveModalOpen} onClose={() => setIsArchiveModalOpen(false)} />
+      <UserGuideModal isOpen={isGuideModalOpen} onClose={() => setIsGuideModalOpen(false)} />
     </aside>
   );
 }

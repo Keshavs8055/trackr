@@ -13,13 +13,13 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
   const { user, loading, signInWithGoogle, signInWithGoogleRedirect, authError } = useAuth();
 
   useEffect(() => {
-    console.log("[AuthWrapper] State transition tracked:", {
-      loading,
-      isAuthenticated: !!user,
-      userId: user?.uid || null,
-      userEmail: user?.email || null,
-      hasError: !!authError,
-    });
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[AuthWrapper] State transition tracked:", {
+        loading,
+        isAuthenticated: !!user,
+        hasError: !!authError,
+      });
+    }
   }, [loading, user, authError]);
 
   if (loading) {

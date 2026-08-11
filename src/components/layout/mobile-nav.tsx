@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Archive, Search, Plus, User, X, LogOut, Download } from "lucide-react";
+import { Archive, Search, Plus, User, X, LogOut, Download, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
 import { useFilterStore } from "@/store/filter-store";
@@ -11,6 +11,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArchivePortabilityModal } from "@/components/settings/archive-portability-modal";
+import { UserGuideModal } from "@/components/guide/user-guide-modal";
 
 export function MobileNav() {
   const router = useRouter();
@@ -21,7 +22,6 @@ export function MobileNav() {
   const { clearFilters } = useFilterStore();
   
   const [profileDrawerOpen, setProfileDrawerOpen] = useState(false);
-  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
 
   const handleHomeClick = () => {
     clearFilters();
@@ -31,8 +31,6 @@ export function MobileNav() {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
-
-  
 
   return (
     <>
@@ -78,18 +76,6 @@ export function MobileNav() {
         </nav>
       </div>
 
-      {/* Floating Action Button (FAB) for 1-Thumb Quick Add on Mobile */}
-      {/* <motion.button
-        initial={{ scale: 0, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        whileTap={{ scale: 0.9 }}
-        onClick={() => setQuickAddOpen(true)}
-        className="md:hidden fixed bottom-18 right-4 z-40 size-12 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center border border-primary-foreground/20 active:scale-95 transition-all"
-        aria-label="Quick Add Resource"
-      >
-        <Plus className="size-6 stroke-[2.5px]" />
-      </motion.button> */}
-
       {/* Profile Drawer */}
       <ProfileDrawer isOpen={profileDrawerOpen} onClose={() => setProfileDrawerOpen(false)} />
     </>
@@ -108,6 +94,7 @@ function ProfileDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
   const installPrompt = useAppStore(s => s.installPrompt);
   const setInstallPrompt = useAppStore(s => s.setInstallPrompt);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+  const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
 
   useEffect(() => {
     setIsIOS(/iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream);
@@ -180,6 +167,18 @@ function ProfileDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
 
               {/* Options */}
               <div className="px-5 pb-5 space-y-3">
+                <Button 
+                  variant="outline" 
+                  className="w-full h-10 rounded-xl text-xs font-bold gap-1.5 border border-border bg-secondary/20 hover:bg-secondary/45"
+                  onClick={() => {
+                    onClose();
+                    setIsGuideModalOpen(true);
+                  }}
+                >
+                  <HelpCircle className="size-3.5 text-primary" />
+                  How to Use Guide
+                </Button>
+
                 {installPrompt && (
                   <Button 
                     variant="outline" 
@@ -234,6 +233,7 @@ function ProfileDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
         )}
       </AnimatePresence>
       <ArchivePortabilityModal isOpen={isArchiveModalOpen} onClose={() => setIsArchiveModalOpen(false)} />
+      <UserGuideModal isOpen={isGuideModalOpen} onClose={() => setIsGuideModalOpen(false)} />
     </>
   );
 }

@@ -41,35 +41,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [authError, setAuthError] = useState<string | null>(null);
 
   const clearAuthError = () => {
-    console.log("[AuthProvider] Clearing authentication error state.");
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[AuthProvider] Clearing authentication error state.");
+    }
     setAuthError(null);
   };
 
   useEffect(() => {
     let isMounted = true;
-    console.log("[AuthProvider] Mounting AuthProvider. Setting up onAuthStateChanged listener.");
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[AuthProvider] Mounting AuthProvider. Setting up onAuthStateChanged listener.");
+    }
 
     // Check redirect result on mount to resolve pending sign-in redirects
     getRedirectResult(auth)
       .then((result) => {
         if (!isMounted) return;
-        if (result) {
-          console.log("[AuthProvider] getRedirectResult successfully returned a user:", {
-            uid: result.user.uid,
-            email: result.user.email,
-            displayName: result.user.displayName,
-          });
-        } else {
-          console.log("[AuthProvider] getRedirectResult returned null (no pending redirect auth result).");
+        if (result && process.env.NODE_ENV !== "production") {
+          console.log("[AuthProvider] getRedirectResult successfully returned user session.");
         }
       })
       .catch((error) => {
         if (!isMounted) return;
-        console.error("[AuthProvider] getRedirectResult failed. Detailed redirect error:", {
-          code: error?.code,
-          message: error?.message,
-          stack: error?.stack,
-        });
+        console.error("[AuthProvider] getRedirectResult error:", error?.code, error?.message);
         
         const errorCode = error?.code || "";
         if (errorCode === "auth/unauthorized-domain") {
@@ -81,27 +75,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-        if (!isMounted) {
-          console.log("[AuthProvider] onAuthStateChanged fired but component was already unmounted.");
-          return;
-        }
+        if (!isMounted) return;
         
-        console.log("[AuthProvider] Auth state changed. Active Firebase User:", firebaseUser ? {
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          displayName: firebaseUser.displayName,
-          emailVerified: firebaseUser.emailVerified,
-          isAnonymous: firebaseUser.isAnonymous,
-        } : "GUEST/NULL");
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[AuthProvider] Auth state changed. User present:", !!firebaseUser);
+        }
 
         setUser(firebaseUser);
         setLoading(false);
 
         if (firebaseUser) {
           try {
-            console.log("[AuthProvider] User detected, initializing secure credentials vault for UID:", firebaseUser.uid);
             providerService.initializeCredentials(firebaseUser.uid);
-            console.log("[AuthProvider] Credentials vault initialization requested.");
           } catch (err) {
             console.error("[AuthProvider] Failed to initialize credentials vault on auth change:", err);
           }
@@ -109,7 +94,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       return () => {
-        console.log("[AuthProvider] Unmounting AuthProvider. Cleaning up onAuthStateChanged listener.");
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[AuthProvider] Unmounting AuthProvider.");
+        }
         isMounted = false;
         unsubscribe();
       };
@@ -122,53 +109,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signInWithGoogle = async () => {
-    console.log("[AuthProvider] signInWithGoogle (popup) invoked.");
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[AuthProvider] signInWithGoogle (popup) invoked.");
+    }
     setAuthError(null);
     const provider = new GoogleAuthProvider();
     
-    console.log("[AuthProvider] Initialized GoogleAuthProvider:", {
-      providerId: provider.providerId,
-      customParameters: provider.getCustomParameters(),
-    });
-    
     try {
-      console.log("[AuthProvider] Executing signInWithPopup...");
       const result = await signInWithPopup(auth, provider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      console.log("[AuthProvider] signInWithPopup successfully completed.", {
-        uid: result.user.uid,
-        email: result.user.email,
-        displayName: result.user.displayName,
-        credentialProviderId: credential?.providerId,
-      });
-    } catch (error: any) {
-      console.error("[AuthProvider] signInWithPopup failed. Detailed error report:");
-      if (error && typeof error === "object") {
-        console.error("- Error Code:", error.code);
-        console.error("- Error Message:", error.message);
-        console.error("- Error Name:", error.name);
-        console.error("- Custom Data:", error.customData);
-        console.error("- Stack Trace:", error.stack);
-      } else {
-        console.error("- Unknown error:", error);
+      GoogleAuthProvider.credentialFromResult(result);
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[AuthProvider] signInWithPopup successfully completed.");
       }
+    } catch (error: any) {
+      console.error("[AuthProvider] signInWithPopup error:", error?.code, error?.message);
 
       const errorCode = error?.code || "";
       const errorMessage = error?.message || "";
 
       if (errorCode === "auth/popup-blocked") {
-        console.warn("[AuthProvider] Popup blocked by browser. Automatically falling back to signInWithRedirect...");
         setAuthError("Popup blocked by browser. Automatically redirecting to Google Sign-In...");
         
         try {
-          console.log("[AuthProvider] Executing signInWithRedirect (fallback)...");
           await signInWithRedirect(auth, provider);
         } catch (redirectError: any) {
-          console.error("[AuthProvider] signInWithRedirect fallback failed:", redirectError);
+          console.error("[AuthProvider] signInWithRedirect fallback error:", redirectError?.code, redirectError?.message);
           setAuthError(`Redirect sign-in failed: ${redirectError?.message || "Unknown error"}`);
         }
       } else if (errorCode === "auth/popup-closed-by-user") {
-        console.log("[AuthProvider] Sign-in popup was closed by the user.");
         setAuthError("Sign-in popup was closed before completion. Please try again.");
       } else if (errorCode === "auth/unauthorized-domain") {
         setAuthError("Unauthorized Domain: Please add this domain to the Authorized Domains list in the Firebase Console under Authentication -> Settings.");
@@ -179,14 +147,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signInWithGoogleRedirect = async () => {
-    console.log("[AuthProvider] signInWithGoogleRedirect invoked.");
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[AuthProvider] signInWithGoogleRedirect invoked.");
+    }
     setAuthError("Redirecting to Google Sign-In...");
     const provider = new GoogleAuthProvider();
     try {
-      console.log("[AuthProvider] Executing signInWithRedirect...");
       await signInWithRedirect(auth, provider);
     } catch (error: any) {
-      console.error("[AuthProvider] signInWithRedirect failed:", error);
+      console.error("[AuthProvider] signInWithRedirect error:", error?.code, error?.message);
       const errorCode = error?.code || "";
       if (errorCode === "auth/unauthorized-domain") {
         setAuthError("Unauthorized Domain: Please add this domain to the Authorized Domains list in the Firebase Console under Authentication -> Settings.");
@@ -197,17 +166,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    console.log("[AuthProvider] logout invoked. Active user before logout:", user ? user.uid : "NONE");
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[AuthProvider] logout invoked.");
+    }
     try {
       setUser(null);
       await signOut(auth);
-      console.log("[AuthProvider] signOut successfully completed on Firebase.");
     } catch (error: any) {
-      console.error("[AuthProvider] signOut failed. Detailed error:", {
-        code: error?.code,
-        message: error?.message,
-        stack: error?.stack,
-      });
+      console.error("[AuthProvider] signOut error:", error?.code, error?.message);
     } finally {
       setLoading(false);
     }
