@@ -7,8 +7,19 @@ import { Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { Logo } from "@/components/ui/logo";
 
+import { useEffect } from "react";
+
 export function AuthWrapper({ children }: { children: React.ReactNode }) {
   const { user, loading, signInWithGoogle } = useAuth();
+
+  useEffect(() => {
+    console.log("[AuthWrapper] State transition tracked:", {
+      loading,
+      isAuthenticated: !!user,
+      userId: user?.uid || null,
+      userEmail: user?.email || null,
+    });
+  }, [loading, user]);
 
   if (loading) {
     return (
