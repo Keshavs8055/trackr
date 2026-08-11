@@ -10,7 +10,7 @@ import { Logo } from "@/components/ui/logo";
 import { useEffect } from "react";
 
 export function AuthWrapper({ children }: { children: React.ReactNode }) {
-  const { user, loading, signInWithGoogle } = useAuth();
+  const { user, loading, signInWithGoogle, signInWithGoogleRedirect, authError } = useAuth();
 
   useEffect(() => {
     console.log("[AuthWrapper] State transition tracked:", {
@@ -18,8 +18,9 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
       isAuthenticated: !!user,
       userId: user?.uid || null,
       userEmail: user?.email || null,
+      hasError: !!authError,
     });
-  }, [loading, user]);
+  }, [loading, user, authError]);
 
   if (loading) {
     return (
@@ -50,7 +51,7 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
           </p>
           <p className="text-xs text-muted-foreground">Don't worry, your data won't be tracked.</p>
             
-          <div className="flex w-full justify-center">
+          <div className="flex w-full flex-col items-center space-y-3">
             <Button 
               size="lg" 
               className="w-full max-w-xs h-12 text-base shadow-xl hover:scale-105 transition-transform animate-shimmer" 
@@ -58,7 +59,28 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
             >
               Sign in with Google
             </Button>
+            
+            <button
+              onClick={signInWithGoogleRedirect}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-4 cursor-pointer"
+            >
+              Sign in with Redirect (Fallback)
+            </button>
           </div>
+
+          {authError && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`text-xs max-w-xs w-full text-center px-4 py-3 rounded-lg border leading-relaxed ${
+                authError.includes("Redirecting") || authError.includes("Popup blocked")
+                  ? "bg-primary/10 text-primary border-primary/20"
+                  : "bg-destructive/10 text-destructive border-destructive/20"
+              }`}
+            >
+              {authError}
+            </motion.div>
+          )}
         </motion.div>
       </div>
     );
