@@ -32,7 +32,7 @@ const AICommandModal = dynamic(() => import("@/components/ai/ai-command-modal").
 
 
 export default function Home() {
-  const { data: resources, isLoading } = useResources();
+  const { data: resources, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useResources();
   const { data: collections } = useCollections();
   
   const [selectedCollection, setSelectedCollection] = useState<Collection | null>(null);
@@ -180,10 +180,6 @@ export default function Home() {
     maxYear
   ]);
 
-  if (isLoading) {
-    return <ResourceSkeleton />;
-  }
-
   const activeFilterCount = 
     selectedTags.length + 
     selectedTypes.length + 
@@ -194,10 +190,21 @@ export default function Home() {
 
   const hasActiveFilters = searchQuery.trim().length > 0 || activeFilterCount > 0;
 
+  // Automatically fetch subsequent pages if active filters yield few results while more pages exist
+  useEffect(() => {
+    if (hasActiveFilters && filteredResources.length < 5 && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [hasActiveFilters, filteredResources.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  if (isLoading) {
+    return <ResourceSkeleton />;
+  }
+
   return (
     <div className="space-y-6 pb-20 md:pb-8 max-w-2xl mx-auto">
       {/* Sticky Header: Minimal Search & Tag Filters */}
-      <header className="sticky top-0 z-30 bg-background/95 backdrop-blur-md pt-2 pb-4 -mx-4 px-4 border-b border-border/30 space-y-3.5">
+      <header className="sticky top-0 z-30 bg-background/95 backdrop-blur-md -mx-4 px-4 -mt-4 pt-6 pb-4 md:-mx-8 md:px-8 md:-mt-8 md:pt-10 border-b border-border/30 space-y-3.5">
         {/* Mobile App Bar */}
         <div className="flex md:hidden items-center justify-between py-1 px-0.5">
           <div className="flex items-center gap-2">
@@ -309,7 +316,9 @@ export default function Home() {
 
       {/* Resource List / Collections Section */}
       <div className="space-y-4">
-        <ResourceStatsBar resources={resources || []} />
+        <div className={cn(searchQuery ? "hidden md:block" : "block")}>
+          <ResourceStatsBar resources={resources || []} />
+        </div>
         <SavedSearchesBar />
 
         {selectedCollection ? (
@@ -355,6 +364,9 @@ export default function Home() {
             <VirtualizedResourceFeed
               resources={filteredResources}
               onSelectResource={(res) => handleOpenDetails(res)}
+              onLoadMore={() => fetchNextPage()}
+              hasMore={!!hasNextPage}
+              isFetchingNextPage={isFetchingNextPage}
             />
           </>
         )}

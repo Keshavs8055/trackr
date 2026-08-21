@@ -8,7 +8,12 @@ import {
   doc, 
   deleteField,
   writeBatch,
-  getDoc
+  getDoc,
+  orderBy,
+  limit,
+  startAfter,
+  QueryDocumentSnapshot,
+  DocumentData
 } from 'firebase/firestore';
 import { db } from '@/services/firebase';
 import { PROVIDERS, Resource, ResourceProviderMetadata, RESOURCE_TYPES, ResourceType } from '@/types';
@@ -21,6 +26,12 @@ import { getDefaultStatusForType } from '@/domain/status/status-lifecycles';
 import { providerManager } from '@/services/providers/provider-manager';
 import { searchService } from '@/services/providers/search-service';
 import { metadataService } from '@/services/providers/metadata-service';
+
+export interface PaginatedResourcesResult {
+  resources: Resource[];
+  lastDocSnapshot: QueryDocumentSnapshot<DocumentData> | null;
+  hasMore: boolean;
+}
 
 const DEFAULT_MOCK_RESOURCES: Resource[] = [
   {
@@ -147,6 +158,80 @@ export class ResourceService {
       return resources;
     } catch (err) {
       console.error("Error fetching resources:", err);
+      throw AppError.fromError(err);
+    }
+  }
+
+  /**
+   * Fetches resources for a user in paginated batches.
+   */
+  public async getResourcesPaginated(
+    userId: string,
+    pageSize: number = 15,
+    lastDocSnapshot: QueryDocumentSnapshot<DocumentData> | null = null
+  ): Promise<PaginatedResourcesResult> {
+    if (!userId) {
+      return { resources: [], lastDocSnapshot: null, hasMore: false };
+    }
+
+    // Mock user pagination support
+    if (userId === 'mock-user-id') {
+      const allMock = this.getMockResources();
+      allMock.sort((a, b) => b.createdAt - a.createdAt);
+      
+      const startIndex = lastDocSnapshot ? (lastDocSnapshot as any)._offsetIndex || 0 : 0;
+      const sliced = allMock.slice(startIndex, startIndex + pageSize);
+      const nextIndex = startIndex + sliced.length;
+      const hasMore = nextIndex < allMock.length;
+      
+      const dummySnapshot = hasMore ? ({ _offsetIndex: nextIndex } as any) : null;
+      return {
+        resources: sliced,
+        lastDocSnapshot: dummySnapshot,
+        hasMore,
+      };
+    }
+
+    try {
+      const resourcesRef = collection(db, 'users', userId, 'resources');
+      const constraints: any[] = [orderBy('createdAt', 'desc'), limit(pageSize)];
+      
+      if (lastDocSnapshot) {
+        constraints.push(startAfter(lastDocSnapshot));
+      }
+
+      const q = query(resourcesRef, ...constraints);
+      const snapshot = await getDocs(q);
+
+      const docs = snapshot.docs;
+      let resources = docs.map(d => this.normalizeResource(d.id, userId, d.data()));
+
+      // Lazy migration check if initial query returns empty
+      if (resources.length === 0 && !lastDocSnapshot) {
+        const migrationKey = `trackr_migrated_resources_${userId}`;
+        const isAlreadyMigrated = typeof window !== 'undefined' && localStorage.getItem(migrationKey) === 'true';
+        if (!isAlreadyMigrated) {
+          const migrated = await this.migrateLegacyItems(userId);
+          migrated.sort((a, b) => b.createdAt - a.createdAt);
+          const sliced = migrated.slice(0, pageSize);
+          return {
+            resources: sliced,
+            lastDocSnapshot: null,
+            hasMore: migrated.length > pageSize,
+          };
+        }
+      }
+
+      const lastDoc = docs.length > 0 ? docs[docs.length - 1] : null;
+      const hasMore = docs.length === pageSize;
+
+      return {
+        resources,
+        lastDocSnapshot: lastDoc,
+        hasMore,
+      };
+    } catch (err) {
+      console.error("Error fetching paginated resources:", err);
       throw AppError.fromError(err);
     }
   }

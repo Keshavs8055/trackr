@@ -24,8 +24,31 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
-        <Loader2 className="size-8 animate-spin text-primary/50" />
+      <div className="flex h-screen w-full flex-col items-center justify-center bg-background p-4 relative overflow-hidden">
+        {/* Subtle background glow */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] bg-primary/5 rounded-full blur-[80px] pointer-events-none" />
+        
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="z-10 flex flex-col items-center space-y-4"
+        >
+          <Logo className="size-16 text-foreground animate-pulse" />
+          <div className="space-y-1 text-center">
+            <h1 className="text-2xl font-bold tracking-wider text-foreground">
+              Trackr
+            </h1>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
+              Personal Archive
+            </p>
+          </div>
+          
+          <div className="pt-4 flex flex-col items-center gap-2">
+            <Loader2 className="size-5 animate-spin text-primary/50" />
+            <span className="text-[10px] text-muted-foreground font-medium animate-pulse">Initializing...</span>
+          </div>
+        </motion.div>
       </div>
     );
   }

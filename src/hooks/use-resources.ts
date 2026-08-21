@@ -1,44 +1,80 @@
 import { useMemo, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { resourceService } from '@/services/resource-service';
 import { useAuth } from '@/components/auth-provider';
 import { Resource } from '@/types';
 import { EventBus } from '@/domain/events/event-bus';
 import { indexedDBCache } from '@/cache/indexed-db-cache';
 
-export function useResources() {
+export function usePaginatedResources(pageSize = 15) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // Instantaneous cold start hydration from IndexedDB
+  // Instantaneous cold start hydration from IndexedDB for paginated queries
   useEffect(() => {
     if (!user?.uid) return;
-    const currentData = queryClient.getQueryData<Resource[]>(['resources', user.uid]);
-    if (!currentData || currentData.length === 0) {
+    const currentData = queryClient.getQueryData(['resources-paginated', user.uid]);
+    if (!currentData) {
       indexedDBCache.getCachedResources().then((cached) => {
         if (cached && cached.length > 0) {
-          queryClient.setQueryData<Resource[]>(['resources', user.uid], (existing) => {
-            return (existing && existing.length > 0) ? existing : cached;
+          queryClient.setQueryData(['resources-paginated', user.uid], (existing: any) => {
+            if (existing) return existing;
+            return {
+              pages: [{
+                resources: cached,
+                lastDocSnapshot: null,
+                hasMore: true
+              }],
+              pageParams: [null]
+            };
           });
         }
       });
     }
   }, [user?.uid, queryClient]);
 
-  return useQuery({
-    queryKey: ['resources', user?.uid],
-    queryFn: async () => {
-      if (!user?.uid) return [];
-      const remoteResources = await resourceService.getResources(user.uid);
-      if (remoteResources && remoteResources.length > 0) {
-        indexedDBCache.cacheResources(remoteResources).catch(() => {});
+  const infiniteQuery = useInfiniteQuery({
+    queryKey: ['resources-paginated', user?.uid],
+    queryFn: async ({ pageParam }: { pageParam?: any }) => {
+      if (!user?.uid) return { resources: [], lastDocSnapshot: null, hasMore: false };
+      const res = await resourceService.getResourcesPaginated(user.uid, pageSize, pageParam as any);
+      if (res.resources && res.resources.length > 0) {
+        indexedDBCache.cacheResources(res.resources).catch(() => {});
       }
-      return remoteResources;
+      return res;
     },
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? (lastPage.lastDocSnapshot || null) : undefined),
+    initialPageParam: null as any,
     enabled: !!user?.uid,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
+
+  const allResources = useMemo(() => {
+    if (!infiniteQuery.data?.pages) return [];
+    const flattened: Resource[] = [];
+    const seen = new Set<string>();
+    
+    for (const page of infiniteQuery.data.pages) {
+      for (const res of page.resources) {
+        if (!seen.has(res.id)) {
+          seen.add(res.id);
+          flattened.push(res);
+        }
+      }
+    }
+    return flattened;
+  }, [infiniteQuery.data]);
+
+  return {
+    ...infiniteQuery,
+    resources: allResources,
+    data: allResources,
+  };
+}
+
+export function useResources() {
+  return usePaginatedResources(15);
 }
 
 export function useAddResource() {
@@ -84,6 +120,7 @@ export function useAddResource() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['resources'] });
+      queryClient.invalidateQueries({ queryKey: ['resources-paginated'] });
     },
   });
 }
@@ -142,6 +179,7 @@ export function useUpdateResource() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['resources'] });
+      queryClient.invalidateQueries({ queryKey: ['resources-paginated'] });
     },
   });
 }
@@ -176,6 +214,7 @@ export function useDeleteResource() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['resources'] });
+      queryClient.invalidateQueries({ queryKey: ['resources-paginated'] });
     },
   });
 }

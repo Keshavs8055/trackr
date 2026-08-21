@@ -115,11 +115,31 @@ export function IntegrationsDrawer() {
               className="relative z-10 w-full max-w-lg bg-card rounded-t-2xl md:rounded-2xl border border-border shadow-lg flex flex-col max-h-[85vh] overflow-hidden gpu-accelerated"
             >
               {/* Header */}
-              <div className="px-5 py-3.5 flex items-center justify-between border-b border-border/30">
-                <div className="flex items-center gap-1.5 p-1 rounded-lg bg-secondary/50 border border-border/40">
+              <div className="px-5 py-3.5 flex flex-col gap-3.5 border-b border-border/30">
+                <div className="flex items-center justify-between w-full">
+                  <h2 className="text-sm font-bold text-foreground tracking-tight">Settings</h2>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setIsPortabilityModalOpen(true)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-secondary/50 hover:bg-secondary text-xs font-semibold text-foreground transition-all"
+                      title="Export / Import Backup"
+                    >
+                      <Download className="size-3.5 text-primary" />
+                      <span className="hidden sm:inline">Backup</span>
+                    </button>
+                    <button
+                      onClick={() => setIntegrationsOpen(false)}
+                      className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-all"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 p-1 rounded-lg bg-secondary/50 border border-border/40 w-full">
                   <button
                     onClick={() => setActiveTab('providers')}
-                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                    className={`flex-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
                       activeTab === 'providers'
                         ? 'bg-background text-foreground shadow-xs'
                         : 'text-muted-foreground hover:text-foreground'
@@ -130,7 +150,7 @@ export function IntegrationsDrawer() {
                   </button>
                   <button
                     onClick={() => setActiveTab('ai_settings')}
-                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                    className={`flex-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
                       activeTab === 'ai_settings'
                         ? 'bg-background text-foreground shadow-xs'
                         : 'text-muted-foreground hover:text-foreground'
@@ -138,22 +158,6 @@ export function IntegrationsDrawer() {
                   >
                     <Sparkles className="size-3.5 text-purple-400" />
                     <span>AI Settings</span>
-                  </button>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setIsPortabilityModalOpen(true)}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-secondary/50 hover:bg-secondary text-xs font-semibold text-foreground transition-all"
-                    title="Export / Import Backup"
-                  >
-                    <Download className="size-3.5 text-primary" />
-                    <span>Backup</span>
-                  </button>
-                  <button
-                    onClick={() => setIntegrationsOpen(false)}
-                    className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-all"
-                  >
-                    <X className="size-4" />
                   </button>
                 </div>
               </div>
@@ -282,19 +286,19 @@ export function IntegrationsDrawer() {
                               </button>
                             </div>
 
-                            <div className="flex gap-2">
+                            <div className="flex flex-col sm:flex-row gap-2">
                               <input
                                 type="password"
                                 value={apiKeyInput}
                                 onChange={(e) => setApiKeyInput(e.target.value)}
                                 placeholder={`Enter ${item.name} key...`}
-                                className="flex-1 h-9 px-3 rounded bg-background border border-border/50 text-xs font-mono outline-none focus:border-primary"
+                                className="flex-1 h-9 px-3 rounded bg-background border border-border/50 text-xs font-mono outline-none focus:border-primary w-full"
                               />
                               <Button
                                 size="sm"
                                 disabled={isConfiguring || !apiKeyInput.trim()}
                                 onClick={() => handleSaveKey(item.id)}
-                                className="h-9 px-3 text-xs font-semibold"
+                                className="h-9 px-3 text-xs font-semibold w-full sm:w-auto flex items-center justify-center"
                               >
                                 {isConfiguring ? <Loader2 className="size-3 animate-spin mr-1" /> : <Check className="size-3 mr-1" />}
                                 Encrypt & Save
