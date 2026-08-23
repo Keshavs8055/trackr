@@ -10,7 +10,7 @@ import { Logo } from "@/components/ui/logo";
 import { useEffect } from "react";
 
 export function AuthWrapper({ children }: { children: React.ReactNode }) {
-  const { user, loading, signInWithGoogle, signInWithGoogleRedirect, authError } = useAuth();
+  const { user, loading, signInWithGoogle, signInWithGoogleRedirect, authError, clearAuthError } = useAuth();
 
   useEffect(() => {
     if (process.env.NODE_ENV !== "production") {
@@ -46,7 +46,7 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
           
           <div className="pt-4 flex flex-col items-center gap-2">
             <Loader2 className="size-5 animate-spin text-primary/50" />
-            <span className="text-[10px] text-muted-foreground font-medium animate-pulse">Initializing...</span>
+            <span className="text-[10px] text-muted-foreground font-medium animate-pulse">Initializing session...</span>
           </div>
         </motion.div>
       </div>
@@ -95,13 +95,21 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className={`text-xs max-w-xs w-full text-center px-4 py-3 rounded-lg border leading-relaxed ${
+              className={`text-xs max-w-xs w-full text-center px-4 py-3 rounded-lg border leading-relaxed flex flex-col items-center gap-2 ${
                 authError.includes("Redirecting") || authError.includes("Popup blocked")
                   ? "bg-primary/10 text-primary border-primary/20"
                   : "bg-destructive/10 text-destructive border-destructive/20"
               }`}
             >
-              {authError}
+              <span>{authError}</span>
+              {!authError.includes("Redirecting") && (
+                <button
+                  onClick={clearAuthError}
+                  className="text-[10px] underline underline-offset-2 opacity-80 hover:opacity-100 cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              )}
             </motion.div>
           )}
         </motion.div>

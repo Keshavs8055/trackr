@@ -23,23 +23,40 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_APP_ID || "mock-app-id",
 };
 
-// Initialize Firebase
+// Initialize Firebase app singleton
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-const auth = typeof window !== "undefined"
-  ? initializeAuth(app, {
-      persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+
+// Initialize Firebase Auth with browserLocalPersistence (localStorage) as primary
+// so the session is synchronous, robust against PWA restarts/termination, and falls back to indexedDB
+let auth: ReturnType<typeof getAuth>;
+if (typeof window !== "undefined") {
+  try {
+    auth = initializeAuth(app, {
+      persistence: [browserLocalPersistence, indexedDBLocalPersistence],
       popupRedirectResolver: browserPopupRedirectResolver,
-    })
-  : getAuth(app);
+    });
+  } catch {
+    auth = getAuth(app);
+  }
+} else {
+  auth = getAuth(app);
+}
 
 // Initialize Firestore with client-side offline persistence enabled
-const db = typeof window !== "undefined"
-  ? initializeFirestore(app, {
+let db: ReturnType<typeof getFirestore>;
+if (typeof window !== "undefined") {
+  try {
+    db = initializeFirestore(app, {
       localCache: persistentLocalCache({
         tabManager: persistentMultipleTabManager(),
       }),
-    })
-  : getFirestore(app);
+    });
+  } catch {
+    db = getFirestore(app);
+  }
+} else {
+  db = getFirestore(app);
+}
 
 if (process.env.NODE_ENV !== "production") {
   if (typeof window !== "undefined") {

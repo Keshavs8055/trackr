@@ -1,4 +1,4 @@
-const CACHE_NAME = 'trackr-cache-v1';
+const CACHE_NAME = 'trackr-cache-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/manifest.webmanifest',
@@ -25,6 +25,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cache) => {
           if (cache !== CACHE_NAME) {
+            console.log('[SW] Purging deprecated cache:', cache);
             return caches.delete(cache);
           }
         })
@@ -33,56 +34,62 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch Event - Stale-While-Revalidate caching pattern
+// Fetch Event - Dynamic routing and resilient caching
 self.addEventListener('fetch', (event) => {
-  // Only cache GET requests
+  // Only handle GET requests
   if (event.request.method !== 'GET') return;
   
   const url = new URL(event.request.url);
   
-  // Skip Firebase/hosting auth and api calls, only cache local app assets
+  // Explicitly bypass caching for external origins, auth endpoints, Next.js server actions / APIs
   if (
     url.origin !== self.location.origin ||
     url.pathname.startsWith('/api') ||
-    url.pathname.startsWith('/__') || // Firebase auth / hosting endpoints
+    url.pathname.startsWith('/__') || // Firebase auth & hosting internal handlers
     url.pathname.startsWith('/identity')
   ) {
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // Fetch fresh version in background and update the cache
-        fetch(event.request).then((networkResponse) => {
+  // 1. Navigation requests: Network-First with cached offline shell fallback
+  // This guarantees authentication and dynamic SSR/hydration updates are never blocked by stale cache
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, networkResponse);
+              cache.put(event.request, responseToCache);
             });
           }
-        }).catch(() => {/* Ignore background network errors */});
-        
-        return cachedResponse;
-      }
-
-      return fetch(event.request).then((networkResponse) => {
-        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
           return networkResponse;
-        }
+        })
+        .catch(async () => {
+          // Offline fallback
+          const cached = await caches.match(event.request);
+          return cached || (await caches.match('/'));
+        })
+    );
+    return;
+  }
 
-        // Cache newly fetched assets dynamically
-        const responseToCache = networkResponse.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
-        });
+  // 2. Static assets & media: Stale-While-Revalidate
+  event.respondWith(
+    caches.match(event.request).then((cachedResponse) => {
+      const fetchPromise = fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          return networkResponse;
+        })
+        .catch(() => cachedResponse);
 
-        return networkResponse;
-      }).catch(() => {
-        // Offline fallback for navigation requests
-        if (event.request.mode === 'navigate') {
-          return caches.match('/');
-        }
-      });
+      return cachedResponse || fetchPromise;
     })
   );
 });
