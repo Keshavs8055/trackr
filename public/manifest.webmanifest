@@ -2,11 +2,14 @@
   "name": "Trackr Personal Archive",
   "short_name": "Trackr",
   "description": "A personal memory, experience, and consumption tracking system.",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0B0B0C",
   "theme_color": "#0B0B0C",
-  "orientation": "portrait-primary",
+  "orientation": "any",
+  "categories": ["utilities", "productivity", "lifestyle"],
   "icons": [
     {
       "src": "/icon-192x192.png",

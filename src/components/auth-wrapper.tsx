@@ -10,17 +10,18 @@ import { Logo } from "@/components/ui/logo";
 import { useEffect } from "react";
 
 export function AuthWrapper({ children }: { children: React.ReactNode }) {
-  const { user, loading, signInWithGoogle, signInWithGoogleRedirect, authError, clearAuthError } = useAuth();
+  const { user, loading, isResolvingRedirect, signInWithGoogle, signInWithGoogleRedirect, authError, clearAuthError } = useAuth();
 
   useEffect(() => {
     if (process.env.NODE_ENV !== "production") {
       console.log("[AuthWrapper] State transition tracked:", {
         loading,
+        isResolvingRedirect,
         isAuthenticated: !!user,
         hasError: !!authError,
       });
     }
-  }, [loading, user, authError]);
+  }, [loading, isResolvingRedirect, user, authError]);
 
   if (loading) {
     return (
@@ -46,7 +47,9 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
           
           <div className="pt-4 flex flex-col items-center gap-2">
             <Loader2 className="size-5 animate-spin text-primary/50" />
-            <span className="text-[10px] text-muted-foreground font-medium animate-pulse">Initializing session...</span>
+            <span className="text-[10px] text-muted-foreground font-medium animate-pulse">
+              {isResolvingRedirect ? "Completing authentication..." : "Initializing session..."}
+            </span>
           </div>
         </motion.div>
       </div>
@@ -72,7 +75,7 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
           <p className="text-sm max-w-sm p-0 m-2">
             A simple app built with &#x2764;&#xFE0F; by <b>Keshav Sharma</b>
           </p>
-          <p className="text-xs text-muted-foreground">Don't worry, your data won't be tracked.</p>
+          <p className="text-xs text-muted-foreground">Don&apos;t worry, your data won&apos;t be tracked.</p>
             
           <div className="flex w-full flex-col items-center space-y-3">
             <Button 

@@ -26,13 +26,14 @@ const firebaseConfig = {
 // Initialize Firebase app singleton
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Firebase Auth with browserLocalPersistence (localStorage) as primary
-// so the session is synchronous, robust against PWA restarts/termination, and falls back to indexedDB
+// Initialize Firebase Auth with indexedDBLocalPersistence as primary
+// so the session is durable across PWA cold starts, tab switches, and Safari ITP sweeps,
+// falling back to browserLocalPersistence (localStorage) if IndexedDB is restricted.
 let auth: ReturnType<typeof getAuth>;
 if (typeof window !== "undefined") {
   try {
     auth = initializeAuth(app, {
-      persistence: [browserLocalPersistence, indexedDBLocalPersistence],
+      persistence: [indexedDBLocalPersistence, browserLocalPersistence],
       popupRedirectResolver: browserPopupRedirectResolver,
     });
   } catch {

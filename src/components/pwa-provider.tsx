@@ -72,8 +72,8 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const itemsRef = collection(db, 'users', user.uid, 'items');
-      const q = query(itemsRef);
+      const resourcesRef = collection(db, 'users', user.uid, 'resources');
+      const q = query(resourcesRef);
 
       // Listen with includeMetadataChanges: true to detect hasPendingWrites transitions
       const unsubscribe = onSnapshot(

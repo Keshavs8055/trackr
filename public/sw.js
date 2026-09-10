@@ -1,4 +1,4 @@
-const CACHE_NAME = 'trackr-cache-v2';
+const CACHE_NAME = 'trackr-cache-v3';
 const ASSETS_TO_CACHE = [
   '/',
   '/manifest.webmanifest',
@@ -57,7 +57,11 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
+          // Do not cache responses with transient auth redirect query parameters
+          const hasAuthParams = url.searchParams.has('apiKey') || 
+                                url.searchParams.has('mode') || 
+                                url.searchParams.has('oobCode');
+          if (networkResponse && networkResponse.status === 200 && !hasAuthParams) {
             const responseToCache = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => {
               cache.put(event.request, responseToCache);
